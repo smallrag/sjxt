@@ -1,0 +1,3274 @@
+#--------------------------------------------------------------------------------
+#-- File name:   vb_tool
+#-- Version  ：  v1.3.11
+#-- Commit at：  2025-10-09 17:30:00
+#-- Purpose:     Vastbase Script Tool
+#-- Author:      MVS & Second-line Team 
+#--------------------------------------------------------------------------------
+#!/bin/bash
+
+show_help() {
+    echo "Vastbase Script Tool (vb_tool)"
+    echo ""
+    echo "Usage Summary:"
+    echo "  vb_tool <command> [options]"
+    echo "  Example: vb_tool as <vb_pid>"
+    echo ""
+    echo "Available Commands:"
+    echo "  list                          list vb_tool available script"
+    echo "  analyze_log                   analyze database logs (slow queries or plans)"
+    echo "  as       [vb pid]             display active session info"
+    echo "  asp                           analyze active session profile"
+    echo "  dead_tups                     display dead tuples information"    
+    echo "  kill                          terminate sessions by conditions"
+    echo "  lockchain                     display lock wait chain"
+    echo "  lock_details                  display detailed lock information (holders & waiters)"
+    echo "  mem                           display memory usage information"
+    echo "  memhist                       display memory usage history"
+    echo "  priv                          display privileges for users/tables/databases/schemas"
+    echo "  relxlog [START_LSN] [END_LSN] analyze WAL records for relations"
+    echo "  repl                          display Streaming Replication lag"
+    echo "  slow                          display top slow sql Information"
+    echo "  sp       [guc]                display guc parameter"
+    echo "  sqlstat  [unique_query_id]    display sqlstat information"
+    echo "  st       [relname]            display table or view"
+    echo "  tabsize                       display top number size of tables(including all indexes)"    
+    echo "  tabstat                       display table statistics"
+    echo "  wdr_summary                   display wdr workload information"
+    echo "  wdr_topsql                    display wdr topsql information"
+	echo "  wdr_event                     display wdr top event information"
+    echo "  xloghc                        display xlog health check information"
+	echo "  recover_table                 recover table data by ctid scan (skip corrupted rows)"
+    echo ""
+    echo "Options for analyze_log:"
+    echo "  Usage: -f <file> [-b <begin>] [-e <end>] [-t <type>] [-o <output>]"
+    echo "  Options:"
+    echo "    -f: log file name (required)"
+    echo "    -b: start time (optional)"
+    echo "    -e: end time (optional)"
+    echo "    -t: analysis type (plan or slow, default: slow)"
+    echo "    -o: output format (html, csv, txt, default: html)"
+    echo ""
+    echo "Options for asp:"
+    echo "  Usage: asp <type> -b <begin_time> -e <end_time>"
+    echo "  Types:"
+    echo "    cnt        active session count statistics"
+    echo "    event      event analysis"
+    echo "    waitchain  wait chain analysis"
+    echo "    sql        running sql"
+    echo "  Options:"
+    echo "    -b: start time (format: 'YYYY-MM-DD HH24:MI:SS')"
+    echo "    -e: end time (format: 'YYYY-MM-DD HH24:MI:SS')"
+    echo ""
+    echo "Options for dead_tups:"
+    echo "  Usage: [-d <database>] [-s <schema>] [-t <table>]"
+    echo "  Options:"
+    echo "    -d: database name"
+    echo "    -s: schema name"
+    echo "    -t: table name"
+    echo ""
+    echo "Options for kill:"
+    echo "  Usage: [OPTIONS] [SQL_OPTIONS]"
+    echo "  Options:"
+    echo "    -a              ALL Exclude background sessions"
+    echo "    -d appname      Filter by application name"
+    echo "    -i ip           Filter by client IP"
+    echo "    -p pid          Filter by session ID"
+    echo "    -q sqlid        Filter by unique SQL ID"
+    echo "    -s state        Filter by session state"
+    echo "    -t interval(s)  Filter transactions running longer than interval(seconds)"
+    echo "    -u name         Filter by username"
+    echo ""
+    echo "Options for priv:"
+    echo "  Usage: [-u <user>] [-d <database>] [-s <schema>] [-t <table>]"
+    echo "  Options:"
+    echo "    -u: user name"
+    echo "    -d: database name"
+    echo "    -s: schema name"
+    echo "    -t: table name"
+    echo ""
+    echo "Options for tabsize:"
+    echo "  Usage: -a <all> -n <top number>  or -d <database> -s <schema> -t <table> -n <top number>"
+    echo "  Options:"
+    echo "    -a: if need get tablesizes from all databases(optional, -a all)"
+    echo "    -d: database name (optinal)"
+    echo "    -s: schema name (optional)"
+    echo "    -t: table name (optional)"
+    echo "    -n: top number (required)"    
+    echo ""
+    echo "Options for tabstat:"
+    echo "  Usage: -d <database> -s <schema> -t <table>"
+    echo "  Options:"
+    echo "    -d: database name (default: postgres)"
+    echo "    -s: schema name (required)"
+    echo "    -t: table name (required)"
+}
+
+show_list() {
+    echo "Vastbase Script Tool (vb_tool)"
+    echo ""
+    echo "Usage Summary:"
+    echo "  vb_tool <command> [options]"
+    echo "  Example: vb_tool as <vb_pid>"
+    echo ""
+    echo "Available Commands:"
+    echo "  list                          list vb_tool available script"
+    echo "  analyze_log                   analyze database logs (slow queries or plans)"
+    echo "  as       [vb pid]             display active session info"
+    echo "  asp                           analyze active session profile"
+    echo "  dead_tups                     display dead tuples information"    
+    echo "  kill                          terminate sessions by conditions"
+    echo "  lockchain                     display lock wait chain"
+    echo "  lock_details                  display detailed lock information (holders & waiters)"
+    echo "  mem                           display memory usage information"
+    echo "  memhist                       display memory usage history"
+    echo "  priv                          display privileges for users/tables/databases/schemas"
+    echo "  relxlog [START_LSN] [END_LSN] analyze WAL records for relations"
+    echo "  repl                          display Streaming Replication lag"
+    echo "  slow                          display top slow sql Information"
+    echo "  sp       [guc]                display guc parameter"
+    echo "  sqlstat  [unique_query_id]    display sqlstat information"
+    echo "  st       [relname]            display table or view"
+    echo "  tabsize                       display top number size of tables(including all indexes)"    
+    echo "  tabstat                       display table statistics"
+    echo "  wdr_summary                   display wdr workload information"
+    echo "  wdr_topsql                    display wdr topsql information"
+	echo "  wdr_event                     display wdr top event information"
+    echo "  xloghc                        display xlog health check information"
+	echo "  recover_table                 recover table data by ctid scan (skip corrupted rows)"
+    echo ""
+}
+
+as_help() {
+    echo "Usage: vb_tool as [vb pid]"
+    echo "Description: Display active session info for the given vb pid."
+    echo ""
+}
+
+recover_table_help() {
+    echo "Options for recover_table:"
+    echo "  Usage: -d <database> -s <schema> -t <table> [-n <rows_per_page>]"
+    echo "  Options:"
+    echo "    -d: database name (required)"
+    echo "    -s: schema name (required)"
+    echo "    -t: table name (required)"
+    echo "    -n: rows per page (optional, default: 100)"
+    echo ""
+}
+
+analyze_log_help() {
+    echo "Options for analyze_log:"
+    echo "  Usage: -f <file> [-b <begin>] [-e <end>] [-t <type>] [-o <output>]"
+    echo "  Options:"
+    echo "    -f: log file name (required)"
+    echo "    -b: start time (optional)"
+    echo "    -e: end time (optional)"
+    echo "    -t: analysis type (plan or slow, default: slow)"
+    echo "    -o: output format (html, csv, txt, default: html)"
+    echo ""
+}
+
+asp_help() {
+    echo "Options for asp:"
+    echo "  Usage: asp <type> -b <begin_time> -e <end_time>"
+    echo "  Types:"
+    echo "    cnt        active session count statistics"
+    echo "    event      event analysis"
+    echo "    waitchain  wait chain analysis"
+    echo "    sql        running sql"
+    echo "  Options:"
+    echo "    -b: start time (format: 'YYYY-MM-DD HH24:MI:SS')"
+    echo "    -e: end time (format: 'YYYY-MM-DD HH24:MI:SS')"
+    echo ""
+}
+
+dead_tups_help() {
+    echo "Options for dead_tups:"
+    echo "  Usage: [-d <database>] [-s <schema>] [-t <table>]"
+    echo "  Options:"
+    echo "    -d: database name"
+    echo "    -s: schema name"
+    echo "    -t: table name"
+    echo ""
+}    
+
+kill_help() {
+    echo "Options for kill:"
+    echo "  Usage: [OPTIONS] [SQL_OPTIONS]"
+    echo "  Options:"
+    echo "    -a              ALL Exclude background sessions"
+    echo "    -d appname      Filter by application name"
+    echo "    -i ip           Filter by client IP"
+    echo "    -p pid          Filter by session ID"
+    echo "    -q sqlid        Filter by unique SQL ID"
+    echo "    -s state        Filter by session state"
+    echo "    -t interval(s)  Filter transactions running longer than interval(seconds)"
+    echo "    -u name         Filter by username"
+    echo ""
+}
+
+priv_help() {
+    echo "Options for priv:"
+    echo "  Usage: [-u <user>] [-d <database>] [-s <schema>] [-t <table>]"
+    echo "  Options:"
+    echo "    -u: user name"
+    echo "    -d: database name"
+    echo "    -s: schema name"
+    echo "    -t: table name"
+    echo ""
+}
+
+tabsize_help() {
+    echo "Options for tabsize:"
+    echo "  Usage: -a <all> -n <top number>  or -d <database> -s <schema> -t <table> -n <top number>"
+    echo "  Options:"
+    echo "    -a: if need get tablesizes from all databases(optional, -a all)"
+    echo "    -d: database name (optinal)"
+    echo "    -s: schema name (optional)"
+    echo "    -t: table name (optional)"
+    echo "    -n: top number (required)"
+    echo ""
+}
+
+tabstat_help() {
+    echo "Options for tabstat:"
+    echo "  Usage: -d <database> -s <schema> -t <table>"
+    echo "  Options:"
+    echo "    -d: database name (default: postgres)"
+    echo "    -s: schema name (required)"
+    echo "    -t: table name (required)"
+    echo ""
+}
+
+lockchain_help() {
+    echo "Options for lockchain:"
+    echo "  Usage: None"
+    echo "  Description: display lock wait chain"
+    echo ""
+}
+
+lock_details_help() {
+    echo "Options for lock_details:"
+    echo "  Usage: None"
+    echo "  Description: display detailed lock information (holders & waiters)"
+    echo ""
+}
+
+mem_help() {
+    echo "Options for mem:"
+    echo "  Usage: vb_tool mem"
+    echo "  Description: display memory usage information"
+    echo ""
+}
+
+memhist_help() {
+    echo "Options for memhist:"
+    echo "  Usage: vb_tool memhist"
+    echo "  Description: display memory usage history"
+    echo ""
+}
+
+relxlog_help() {
+    echo "Options for relxlog:"
+    echo "  Usage: [START_LSN] [END_LSN]"
+    echo "  Description: analyze WAL records for relations"
+    echo ""
+}
+
+repl_help() {
+    echo "Options for repl:"
+    echo "  Usage: None"
+    echo "  Description: display Streaming Replication lag"
+    echo ""
+}
+
+slow_help() {
+    echo "Options for slow:"
+    echo "  Usage: vb_tool slow"
+    echo "  Description: display top slow sql Information"
+    echo ""
+}
+
+sp_help() {
+    echo "Options for sp:"
+    echo "  Usage: vb_tool sp [guc]"
+    echo "  Description: display guc parameter"
+    echo ""
+}
+
+sqlstat_help() {
+    echo "Options for sqlstat:"
+    echo "  Usage: vb_tool sqlstat [unique_query_id]"
+    echo "  Description: display sqlstat information"
+    echo ""
+}
+
+st_help() {
+    echo "Options for st:"
+    echo "  Usage: vb_tool st [relname]"
+    echo "  Description: display table or view"
+    echo ""
+}
+
+wdr_summary_help() {
+    echo "Options for wdr_summary:"
+    echo "  Usage: vb_tool wdr_summary"
+    echo "  Description: display wdr workload information"
+    echo ""
+}
+
+wdr_event_help() {
+    echo "Options for wdr_event:"
+    echo "  Usage: vb_tool wdr_summary"
+    echo "  Description: display wdr top event"
+    echo ""
+}
+
+wdr_topsql_help() {
+    echo "Options for wdr_topsql:"
+    echo "  Usage: vb_tool wdr_topsql"
+    echo "  Description: display wdr topsql information"
+    echo ""
+}
+
+xloghc_help() {
+    echo "Options for xloghc:"
+    echo "  Usage: vb_tool xloghc"
+    echo "  Description: display xlog health check information"
+    echo ""
+}
+
+run_recover_table() {
+    local db_name=""
+    local schema_name=""
+    local table_name=""
+    local rows_per_page="100"  
+    
+    while getopts ":d:s:t:n:" opt; do
+      case $opt in
+        d) db_name="$OPTARG" ;;
+        s) schema_name="$OPTARG" ;;
+        t) table_name="$OPTARG" ;;
+        n) rows_per_page="$OPTARG" ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        :) echo "Option -$OPTARG requires argument" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$db_name" ] || [ -z "$schema_name" ] || [ -z "$table_name" ]; then
+        echo "Error: -d (database), -s (schema), and -t (table) parameters are required" >&2
+        recover_table_help
+        exit 1
+    fi
+    
+    echo "Starting table recovery: database=$db_name, schema=$schema_name, table=$table_name, rows_per_page=$rows_per_page"
+    
+    psql -d "$db_name" <<EOF
+DO \$\$
+DECLARE
+   v_s_bno INTEGER;
+   v_e_bno INTEGER;
+   v_ctid TID;
+   v_owner VARCHAR(100) := '$schema_name';
+   v_table VARCHAR(100) := '$table_name';
+   v_o_table VARCHAR(100);
+   v_sql TEXT;
+   nrows INTEGER := $rows_per_page;
+BEGIN
+   v_s_bno := 0;
+   v_o_table := v_table || '_recover_' || to_char(now(), 'hh24miss');
+   
+   EXECUTE 'SET search_path TO ' || v_owner;
+
+   v_s_bno := 0;
+   v_o_table := v_table || '_recover_'||to_char(sysdate,'hh24miss');
+   
+   EXECUTE 'SET search_path TO ' || v_owner;
+
+   EXECUTE 'CREATE TABLE IF NOT EXISTS ' || v_owner || '.' || v_o_table || 
+           ' (LIKE ' || v_owner || '.' || v_table || ')';
+      
+   SELECT (pg_relation_size((v_owner || '.' || v_table)::regclass) / 8192)::INTEGER INTO v_e_bno;
+   
+   
+   FOR j IN v_s_bno .. v_e_bno LOOP
+      BEGIN
+         FOR x IN 0 .. nrows LOOP
+            v_ctid := '(' || j || ',' || x || ')';
+            v_sql := 'INSERT INTO ' || v_o_table || 
+                     ' SELECT * FROM ' || v_table || 
+                     ' WHERE ctid = ''' || v_ctid || '''';
+            EXECUTE v_sql;
+         END LOOP;
+      EXCEPTION 
+         WHEN OTHERS THEN 
+            NULL;
+      END;
+   END LOOP;
+   
+  RAISE NOTICE 'Data recovery completed successfully: %', v_o_table;
+   
+END \$\$;
+EOF
+}
+
+run_relxlog() {
+    
+    start_lsn="$1"
+    end_lsn="$2"
+
+    if [ -z "$start_lsn" ] || [ -z "$end_lsn" ]; then
+        echo "Error: Missing required parameters" >&2
+        echo "Usage: vb_tool relxlog <start_wal> <end_wal>" >&2
+        echo "Example: vb_tool relxlog 000000010000000800000042 00000001000000080000004C" >&2
+        exit 1
+    fi
+    
+    pg_xlogdump -p $PGDATA/pg_xlog "$start_lsn" "$end_lsn" |
+    awk '/REDO/{
+        type=$19" - "$21;
+        size=$13;
+        gsub($13,";","");
+        type_cnt[type]++;
+        type_size[type]+=size;
+        total_size+=size;
+        total_entries++;
+        if($0 ~ " rel ") {
+            if($30=="rel"){
+                rel=$31;
+            }
+            if($27=="rel"){
+                rel=$28;
+            }
+            rel_cnt[rel]++;
+            rel_size[rel]+=size;
+            rel_total_size+=size;
+        }
+    }
+    END{
+            PROCINFO["sorted_in"]="@val_num_desc"
+            printf("%12s %12s %8s %-50s \n","RedoSize(k)","RedoEntries","%Size","Type")
+            cnt=0;
+            for (type in type_size) {
+                if (++cnt > 30) break;
+                printf("%12.1f %12d %7.1f%% %-50s\n", 
+                       type_size[type]/1024,
+                       type_cnt[type],
+                       (type_size[type]/total_size)*100,
+                       type);
+            }
+            
+            FS="/"
+            printf("\n\n%12s %12s %8s %-10s %-10s\n","RedoSize(k)","RedoEntries","%Size","DBID","RelID")
+            cnt=0;
+            for (rel in rel_size) {
+                if (++cnt > 30) break;
+                $0=rel;
+                printf("%12.1f %12d %7.1f%% %-10s %-10s\n",
+                       rel_size[rel]/1024,
+                       rel_cnt[rel],
+                       (rel_size[rel]/rel_total_size)*100,
+                       $2,$3);
+            };
+    }'
+}
+
+run_mem() {
+    echo "====================" && \
+    echo " os memory monitor" && \
+    echo "====================" && \
+    free -m && \
+    echo "====================" && \
+    echo "    memory info" && \
+    echo "====================" && \
+    (cat /proc/meminfo | grep -i -E "shm|active|buffer|cache|free|swap|slab|srec|sunr|dirty|pagetable|top|total|ava" | \
+      grep -v Cma | grep -v HugePages | grep -v Vmall | \
+      awk 'BEGIN {count=0} {printf "%-20s %12s kB\t", $1, $2; count++; if(count%3==0) print ""} END {if(count%3!=0) print ""}' | \
+      column -t -s $'\t') && \
+    echo "====================" && \
+    echo " Paging statistics" && \
+    echo "====================" && \
+    sar -B 1 1 | grep -v Linux | grep -v Ave && \
+    echo "====================" && \
+    echo "    memory frag" && \
+    echo "====================" && \
+    cat /proc/buddyinfo && \
+    psql -d postgres<<EOF
+\pset footer off
+\echo ====================
+\echo      memory guc
+\echo ====================
+select name,setting,unit,context
+from pg_settings where name in (
+'maintenance_work_mem','work_mem','shared_buffers','max_process_memory',
+'wal_buffers','effective_cache_size','cstore_buffers','segment_buffers','temp_buffers'
+,'local_syscache_threshold','max_connections'
+);
+
+\echo ====================
+\echo total memory detail
+\echo ====================
+select memorytype,pg_size_pretty(memorymbytes*1024*1024::numeric(100,0)) size from dbe_perf.memory_node_detail where memorymbytes>0;
+
+\echo ============================
+\echo top 10 shared memory context
+\echo ============================
+select contextname,count(*) context_cnt,pg_size_pretty(sum(totalsize)::numeric(100,0)) total_size,pg_size_pretty(sum(freesize)::numeric(100,0)) free_size,pg_size_pretty(sum(usedsize)::numeric(100,0)) used_size from gs_shared_memory_detail group by contextname order by sum(totalsize) desc limit 10;
+
+\echo =============================
+\echo top 10 session memory context
+\echo =============================
+select contextname,count(*) context_cnt,pg_size_pretty(sum(totalsize)::numeric(100,0)) total_size,pg_size_pretty(sum(freesize)::numeric(100,0)) free_size,pg_size_pretty(sum(usedsize)::numeric(100,0)) used_size from gs_session_memory_detail group by contextname order by sum(totalsize) desc limit 10;
+
+\echo =============================
+\echo top 10 session memory used
+\echo =============================
+select a.sessionid,application_name,state,pg_size_pretty(sum(t1.totalsize)::numeric) total_size,substr(REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) sql_text
+ from pg_stat_activity a, gs_session_memory_detail t1  where a.sessionid = split_part(sessid,'.',2)
+group by a.sessionid,application_name,state,substr(REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) order by sum(t1.totalsize) desc limit 10;
+EOF
+}
+
+run_memhist() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo 'please input begin date: ' 
+\prompt begin_date
+\echo 'please input end date: ' 
+\prompt end_date
+\echo '==========================='
+\echo '   Memory Usage History'
+\echo '==========================='
+WITH tmp
+AS (
+    SELECT a.snapshot_id, a.snap_memorytype, a.snap_memorymbytes, to_char(b.start_ts,'yyyy-mm-dd hh24:mi:ss') start_ts
+    FROM snapshot.snap_global_memory_node_detail a, snapshot.tables_snap_timestamp b
+    WHERE a.snapshot_id = b.snapshot_id AND b.tablename = 'snap_global_memory_node_detail'
+     and to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')>=nvl(:'begin_date',to_char(trunc(now()),'yyyy-mm-dd hh24:mi:ss')) 
+     and to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')<=nvl(:'end_date',to_char(trunc(now()+1),'yyyy-mm-dd hh24:mi:ss')))
+SELECT start_ts,
+       pg_size_pretty(process_used*1024*1024::numeric(100,0)) process_used,
+       pg_size_pretty(dynamic_used*1024*1024::numeric(100,0)) dynamic_used,
+       pg_size_pretty(shared_used*1024*1024::numeric(100,0)) shared_used,
+       pg_size_pretty(backend_used*1024*1024::numeric(100,0)) backend_used,
+       pg_size_pretty(other_used*1024*1024::numeric(100,0)) other_used
+FROM tmp
+PIVOT(sum(snap_memorymbytes) FOR snap_memorytype IN 
+      ('process_used_memory' AS process_used, 
+       'dynamic_used_memory' AS dynamic_used, 
+       'shared_used_memory' AS shared_used, 
+       'backend_used_memory' AS backend_used,
+       'other_used_memory' AS other_used))
+ORDER BY start_ts;
+EOF
+}
+
+run_show_privilege() {
+    local user_param=""
+    local table_param=""
+    local db_param=""
+    local schema_param=""
+
+    while getopts ":u:d:s:t:" opt; do
+      case $opt in
+        u) user_param="$OPTARG" ;;
+        d) db_param="$OPTARG" ;;
+        s) schema_param="$OPTARG" ;;
+        t) table_param="$OPTARG" ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        :) echo "Option -$OPTARG requires argument" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$db_param" ]; then
+        echo "Error: -d parameters required" >&2
+        priv_help
+        exit 1
+    fi
+
+    psql -d "$db_param" <<EOF
+\pset footer off
+\pset tuples_only on
+$(
+    [ -n "$user_param" ] && echo "\\set _user '$user_param'"
+    [ -n "$table_param" ] && echo "\\set _table '$table_param'"
+    [ -n "$db_param" ] && echo "\\set _db '$db_param'"
+    [ -n "$schema_param" ] && echo "\\set _schema '$schema_param'"
+)
+
+$([ -n "$user_param" ] && cat <<'USER_PRIVS'
+SELECT  'ALTER ROLE ' || quote_ident(rolname) || ' ' ||    
+    CASE WHEN rolsuper THEN 'SUPERUSER ' ELSE 'NOSUPERUSER ' END ||
+    CASE WHEN rolinherit THEN 'INHERIT ' ELSE 'NOINHERIT ' END ||
+    CASE WHEN rolcreaterole THEN 'CREATEROLE ' ELSE 'NOCREATEROLE ' END ||
+    CASE WHEN rolcreatedb THEN 'CREATEDB ' ELSE 'NOCREATEDB ' END ||
+    CASE WHEN rolcanlogin THEN 'LOGIN ' ELSE 'NOLOGIN ' END ||
+    CASE WHEN rolreplication THEN 'REPLICATION ' ELSE 'NOREPLICATION ' END ||
+    CASE WHEN rolconnlimit >= 0 THEN 'CONNECTION LIMIT ' || rolconnlimit || ' ' ELSE '' END ||
+    CASE WHEN rolvaliduntil IS NOT NULL THEN 'VALID UNTIL ' || quote_literal(rolvaliduntil::text) ELSE '' END || ';'     
+    AS show_privilege 
+FROM pg_roles 
+WHERE rolname = :'_user' 
+UNION ALL 
+SELECT     
+    'GRANT "' || pg_get_userbyid(roleid) || '" TO "' || pg_get_userbyid(member) || '"' ||
+    (case when admin_option='t' then ' WITH ADMIN OPTION' else '' end)||
+    ' GRANTED BY '||pg_get_userbyid(grantor)||';'  
+    as show_privilege  
+FROM pg_auth_members   
+WHERE pg_get_userbyid(member)= :'_user'  
+UNION ALL   
+(WITH def AS (
+    SELECT nsp.nspname,pda.*,(aclexplode(defaclacl)).*    
+    FROM pg_default_acl pda  
+    LEFT JOIN pg_namespace nsp ON pda.defaclnamespace = nsp.oid  
+)  
+SELECT       
+    'ALTER DEFAULT PRIVILEGES ' ||
+    (CASE WHEN nspname IS NOT NULL 
+          THEN 'IN SCHEMA "' || nspname|| '" ' 
+         ELSE '' 
+    END) ||
+    'FOR ROLE ' || pg_get_userbyid(def.defaclrole) || ' ' ||
+    'GRANT ' || string_agg(def.privilege_type, ', ') || ' ' ||
+    'ON ' || 
+    CASE def.defaclobjtype 
+        WHEN 'r' THEN 'TABLES' 
+        WHEN 'S' THEN 'SEQUENCES' 
+        WHEN 'f' THEN 'FUNCTIONS' 
+        WHEN 'T' THEN 'TYPES' 
+    END || ' TO ' || pg_get_userbyid(def.grantee) || ';'  
+    as show_privilege  
+FROM def  
+WHERE pg_get_userbyid(def.grantee)= :'_user'  
+GROUP BY nspname,defaclrole,defaclnamespace,defaclobjtype,defaclacl,grantor,grantee,is_grantable);
+USER_PRIVS
+)
+
+$([ -n "$table_param" ] && cat <<'TABLE_PRIVS'
+SELECT 'GRANT ' || privilege_type || ' ON TABLE "' || table_schema || '"."' || table_name || '" TO "' || grantee || 
+    (case when is_grantable ='YES' then '" WITH GRANT OPTION' else '"' end)  || ';'  
+    as show_privilege  
+FROM information_schema.table_privileges   
+WHERE table_name= :'_table';
+TABLE_PRIVS
+)
+
+$([ -n "$db_param" ] && cat <<'DB_PRIVS'
+SELECT 'GRANT ' || string_agg(privilege_type,',') || ' ON DATABASE "' || datname || '" TO "' || 
+    (case when grantee=0 then 'PUBLIC' else pg_get_userbyid(grantee) end)|| '"' ||
+    (CASE WHEN is_grantable = 'YES' THEN ' WITH GRANT OPTION;' ELSE ';' END)  
+    as show_privilege  
+FROM (
+    SELECT datname, (aclexplode(datacl)).*  
+    FROM pg_database  
+) AS db_acl  
+WHERE datname = :'_db'  
+GROUP BY datname,grantor,grantee,is_grantable;
+DB_PRIVS
+)
+
+$([ -n "$schema_param" ] && cat <<'SCHEMA_PRIVS'
+SELECT 'GRANT ' || string_agg(privilege_type,',') || ' ON SCHEMA "' || nspname || '" TO "' || 
+    (case when grantee=0 then 'PUBLIC' else pg_get_userbyid(grantee) end)|| '"' ||
+    (CASE WHEN is_grantable = 'YES' THEN ' WITH GRANT OPTION;' ELSE ';' END)  
+    as show_privilege  
+FROM (
+    SELECT nspname,(aclexplode(nspacl)).* 
+    FROM pg_namespace   
+) AS nsp_acl  
+WHERE nspname= :'_schema' 
+GROUP BY nspname,grantor,grantee,is_grantable  
+UNION ALL   
+(WITH def AS (
+    SELECT nsp.nspname,pda.*,(aclexplode(defaclacl)).*    
+    FROM pg_default_acl pda  
+    LEFT JOIN pg_namespace nsp ON pda.defaclnamespace = nsp.oid  
+    WHERE nsp.nspname= :'_schema'  
+)  
+SELECT       
+    'ALTER DEFAULT PRIVILEGES IN SCHEMA "' || nspname||'" '||
+    'FOR ROLE ' || pg_get_userbyid(def.defaclrole) || ' ' ||
+    'GRANT ' || string_agg(def.privilege_type, ', ') || ' ' ||
+    'ON ' || 
+    (CASE def.defaclobjtype 
+        WHEN 'r' THEN 'TABLES' 
+        WHEN 'S' THEN 'SEQUENCES' 
+        WHEN 'f' THEN 'FUNCTIONS' 
+        WHEN 'T' THEN 'TYPES' 
+    END) || ' TO ' || (case when grantee=0 then 'PUBLIC' else pg_get_userbyid(def.grantee) end) || ';'  
+    as show_privilege  
+FROM def  
+GROUP BY nspname,defaclrole,defaclnamespace,defaclobjtype,defaclacl,grantor,grantee,is_grantable);
+SCHEMA_PRIVS
+)
+EOF
+}
+
+run_lockchain() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo '=========================='
+\echo 'lock chain analysis'
+\echo '=========================='
+WITH RECURSIVE l AS (
+  SELECT pid, locktype, mode, granted,
+ROW(locktype,database,relation,page,tuple,virtualxid,transactionid,classid,objid,objsubid) obj
+  FROM pg_locks
+), pairs AS (
+  SELECT w.pid waiter, l.pid locker, l.obj, l.mode
+  FROM l w
+  JOIN l ON l.obj IS NOT DISTINCT FROM w.obj AND l.locktype=w.locktype AND NOT l.pid=w.pid AND l.granted
+  WHERE NOT w.granted
+), tree AS (
+  SELECT l.locker pid, l.locker root, NULL::record obj, NULL AS mode, 0 lvl, locker::text w_chain, array_agg(l.locker) OVER () all_pids
+  FROM ( SELECT DISTINCT locker FROM pairs l WHERE NOT EXISTS (SELECT 1 FROM pairs WHERE waiter=l.locker) ) l
+  UNION ALL
+  SELECT w.waiter pid, tree.root, w.obj, w.mode, tree.lvl+1, tree.w_chain||'.'||w.waiter, all_pids || array_agg(w.waiter) OVER ()
+  FROM tree JOIN pairs w ON tree.pid=w.locker AND NOT w.waiter = ANY ( all_pids )
+)
+SELECT (clock_timestamp() - a.xact_start)::interval(3) AS ts_age,
+       replace(a.state, 'idle in transaction', 'idletx') state,
+       (clock_timestamp() - state_change)::interval(3) AS change_age,
+       a.datname,tree.pid,a.usename,a.client_addr,lvl,
+       (SELECT count(*) FROM tree p WHERE p.w_chain ~ ('^'||tree.w_chain) AND NOT p.w_chain=tree.w_chain) blocked,
+       substr(REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) query
+FROM tree
+JOIN pg_stat_activity a USING (pid)
+ORDER BY w_chain;
+EOF
+}
+
+run_tabstat() {
+    local db_name=""
+    local schema_name=""
+    local table_name=""
+    
+
+    while getopts ":d:s:t:" opt; do
+      case $opt in
+        d) db_name="$OPTARG" ;;
+        s) schema_name="$OPTARG" ;;
+        t) table_name="$OPTARG" ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        :) echo "Option -$OPTARG requires argument" >&2; exit 1 ;;
+      esac
+    done
+
+    if [ -z "$db_name" ] || [ -z "$schema_name" ] || [ -z "$table_name" ]; then
+        echo "Error: -d (database), -s (schema), and -t (table) parameters are required" >&2
+        exit 1
+    fi
+    
+psql -d "$db_name" <<EOF
+\pset footer off
+\set schema '$schema_name'
+\set name '$table_name'
+\echo '================'
+\echo 'table statistics'
+\echo '================'
+SELECT n.nspname AS "owner"
+        ,c.relname AS "tab_name"
+        ,CASE c.relpersistence
+                WHEN 'p' THEN 'perm'
+                WHEN 't' THEN 'temp'
+                WHEN 'u' THEN 'unlog'
+                END AS "tabtype"
+        ,(select CASE p.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end from pg_partition p where p.parentid=c.oid limit 1)||NVL2(p2.cols,'('||p2.cols||')','')||NVL2((select CASE p1.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end from pg_partition p,pg_partition p1 where p.parentid=c.oid and p1.parentid=p.oid limit 1),'-'||(select CASE p1.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end from pg_partition p,pg_partition p1 where p.parentid=c.oid and p1.parentid=p.oid limit 1)||'('||p1.cols||')','') parttype
+        ,c.relpages
+        ,c.reltuples
+        ,c.relallvisible allvisible
+        ,pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) AS "size"
+        ,replace(replace(replace(c.reloptions::text,'orientation','ori'),'compression','comp'),'fillfactor','fill') options
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN  (select lower(schema_name) schema_name,lower(name) name,lower(string_agg(column_name,',' order by column_position)) cols  from dba_subpart_key_columns 
+ where object_type='TABLE' and lower(schema_name)= :'schema' and lower(name) in (:'name')
+  group by schema_name,name)  p1 ON c.relname=p1.name and p1.schema_name=n.nspname 
+LEFT JOIN  (select lower(schema_name) schema_name,lower(name) name,lower(string_agg(column_name,',' order by column_position)) cols  from dba_part_key_columns 
+ where object_type='TABLE' and lower(schema_name)= :'schema' and lower(name) in (:'name')
+  group by schema_name,name) p2 ON c.relname=p2.name and p2.schema_name=n.nspname 
+WHERE c.relkind IN ('r','p','v','m','S','f','')
+        AND n.nspname <> 'pg_catalog'
+        AND n.nspname !~ '^pg_toast'
+        AND n.nspname <> 'information_schema'
+        AND pg_catalog.pg_table_is_visible(c.oid)
+        AND c.relname in (:'name')
+        AND n.nspname = :'schema';
+
+\echo '                           '
+select relname,n_tup_ins,n_tup_upd,n_tup_del,n_tup_hot_upd,n_live_tup,n_dead_tup,to_char(last_vacuum,'yyyy-mm-dd hh24:mi:ss') last_vacuum,to_char(last_analyze,'yyyy-mm-dd hh24:mi:ss') last_analyze from pg_stat_all_tables where relname in (:'name') and schemaname = :'schema';
+
+\echo '================'
+\echo 'index statistics'
+\echo '================'
+SELECT n.nspname AS "ind_owner"
+        ,c2.relname AS "tab_name"
+        ,c.relname AS "ind_name"
+        ,replace(am.amname||' '||decode(i.indisunique,'t','unique')||' '||CASE WHEN c.relkind = 'i' and pg_catalog.pg_get_indexdef(i.indexrelid, 0, true) ~ '\)\s*LOCAL' then 'local'
+              WHEN c.relkind = 'I' then 'global'
+         ELSE NULL END,'  ',' ')  ind_type
+        ,decode(i.indisusable,'t','usable','unusable') status
+        ,REGEXP_MATCHES(pg_catalog.pg_get_indexdef(i.indexrelid, 0, true),'\((.*)\)', 'g') col_list
+        ,c.relpages
+        ,c.reltuples
+        ,pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) AS "Size"
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+LEFT JOIN pg_catalog.pg_am am ON am.oid = c.relam
+LEFT JOIN pg_catalog.pg_index i ON i.indexrelid = c.oid
+LEFT JOIN pg_catalog.pg_class c2 ON i.indrelid = c2.oid
+LEFT JOIN pg_catalog.pg_namespace n1 ON n1.oid = c2.relnamespace
+WHERE c.relkind IN ('i','I','')
+        AND n.nspname <> 'pg_catalog'
+        AND n.nspname !~ '^pg_toast'
+        AND n.nspname <> 'information_schema'
+        AND c2.relname in (:'name')
+        AND n1.nspname = :'schema'
+        AND pg_catalog.pg_table_is_visible(c.oid) order by 1,2;
+
+\echo '                                  '
+select schemaname,relname tab_name,indexrelname index_name,idx_scan,idx_tup_read,idx_tup_fetch from pg_stat_all_indexes where schemaname =:'schema' and relname in (:'name') order by 1,2;
+
+\echo '================='
+\echo 'column statistics'
+\echo '================='
+SELECT   relname tab_name
+        ,t.attname col_name
+        ,t.type
+        ,decode(attnotnull,'true','not null',round(null_frac,5))  notnull_frac
+        ,avg_width
+        ,round(n_distinct,5) n_dist
+        ,decode(attstorage,'p','plain','e','external','m','main','x','extended') attstorage
+        ,round(correlation,5) corr
+        ,top3_freqs
+FROM (
+        SELECT  c.relname,a.attname,a.attnum
+                ,pg_catalog.format_type(a.atttypid, a.atttypmod) type
+                ,a.attnotnull
+                ,b.null_frac
+                ,b.avg_width
+                ,b.n_distinct
+                ,b.correlation
+                ,a.attstorage
+        FROM pg_catalog.pg_attribute a
+                join pg_class c on a.attrelid=c.oid 
+                left join pg_catalog.pg_stats b on a.attname=b.attname and c.relname=b.tablename
+                join pg_catalog.pg_namespace d on c.relnamespace=d.oid 
+        WHERE a.attrelid = c.oid
+                AND a.attnum > 0
+                AND NOT a.attisdropped
+                AND d.nspname = :'schema'
+                AND c.relname in (:'name')
+        ORDER BY a.attnum
+        ) t
+LEFT JOIN (
+        SELECT  tablename,attname
+                ,string_agg(top3_freq::TEXT, ',' ORDER BY top3_freq DESC) top3_freqs
+        FROM (
+                SELECT tablename,attname
+                        ,round(UNNEST(most_common_freqs)::DECIMAL, 4) top3_freq
+                        ,row_number() OVER (PARTITION BY tablename,attname ORDER BY round(UNNEST(most_common_freqs)::DECIMAL, 4) DESC) rn
+                        FROM pg_stats
+                WHERE tablename in (:'name')
+                        AND schemaname = :'schema'
+                ) d 
+        WHERE rn <= 3
+        GROUP BY tablename,attname
+        ) t1 ON t.attname = t1.attname and t.relname=t1.tablename order by 1,attnum;
+
+
+
+\echo '===================='
+\echo 'partition statistics'
+\echo '===================='
+select n.nspname schema_name,c.relname tab_name,partitionno partno,p.relname part_name,CASE p.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end parttype,cols partkey,p.relpages,p.reltuples,pg_size_pretty(pg_partition_size(p.parentid,p.oid)) size,boundaries from pg_partition p,pg_class c,(select lower(schema_name) schema_name,lower(name) name,lower(string_agg(column_name,',' order by column_position)) cols  from dba_part_key_columns 
+ where object_type='TABLE' 
+  group by schema_name,name) p1,pg_namespace n
+where p.parttype in ('p') and c.oid=p.parentid and p.subpartitionno is null and p1.name=c.relname and n.oid = c.relnamespace and p1.schema_name=n.nspname 
+  and   c.relname in (:'name')
+  and n.nspname = :'schema' order by 1,2,3; 
+
+\echo '======================='
+\echo 'subpartition statistics'
+\echo '======================='
+select c.relname tab_name,p.relname part_name,ps.relname subpart_name,CASE p.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end||'('||p1.cols||')-'||CASE ps.partstrategy
+            WHEN 'r'::"char" THEN 'RANGE'::varchar(9)
+            WHEN 'i'::"char" THEN 'INTERVAL'::varchar(9)
+            WHEN 'l'::"char" THEN 'LIST'::varchar(9)
+            WHEN 'h'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'd'::"char" THEN 'HASH'::varchar(9)
+            WHEN 'v'::"char" THEN 'VALUE'::varchar(9)
+            WHEN 's'::"char" THEN 'SYSTEM'::varchar(9)
+            WHEN 'n'::"char" THEN 'NONE'::varchar(9)
+         ELSE NULL end ||'('||p2.cols||')' part_type
+         ,ps.relpages,ps.reltuples,pg_size_pretty(pg_partition_size(ps.parentid,ps.oid)) size,p.boundaries partbound,ps.boundaries subpartbound
+ from pg_partition p,pg_partition ps,pg_class c,pg_namespace n,(select lower(schema_name) schema_name,lower(name) name,lower(string_agg(column_name,',' order by column_position)) cols  from dba_part_key_columns
+ where object_type='TABLE' group by schema_name,name) p1,
+  (select lower(schema_name) schema_name,lower(name) name,lower(string_agg(column_name,',' order by column_position)) cols  from dba_subpart_key_columns
+ where object_type='TABLE' group by schema_name,name) p2
+where (p.parttype='s' or (p.parttype='p' and p.subpartitionno is not null)) and c.oid=p.parentid and  c.relname =p1.name and n.oid = c.relnamespace and p1.schema_name=n.nspname
+  and ps.parentid=p.oid 
+  and   c.relname in (:'name')
+  and n.nspname = :'schema' order by 1,2,3; 
+
+\echo '==================='
+\echo 'extended statistics'
+\echo '==================='
+SELECT schemaname owner
+        ,a.tablename tab_name
+        ,a.attname
+        ,null_frac
+        ,a.attname
+        ,avg_width
+        ,n_distinct
+        ,n_dndistinct
+        ,top3_freqs
+FROM (
+        SELECT schemaname
+                ,tablename
+                ,attname
+                ,null_frac
+                ,avg_width
+                ,n_distinct
+                ,n_dndistinct
+        FROM pg_catalog.pg_ext_stats
+        WHERE tablename in (:'name')
+                AND schemaname = :'schema'
+        ) a
+LEFT JOIN (
+        SELECT tablename,attname
+                ,string_agg(top3_freq::TEXT, ',' ORDER BY top3_freq DESC) top3_freqs
+        FROM (
+                SELECT tablename,attname
+                        ,round(UNNEST(most_common_freqs)::DECIMAL, 4) top3_freq
+                        ,row_number() OVER (PARTITION BY tablename,attname ORDER BY round(UNNEST(most_common_freqs)::DECIMAL, 4) DESC) rn
+                FROM pg_catalog.pg_ext_stats
+                WHERE tablename in (:'name')
+                        AND schemaname = :'schema'
+                ) d
+        WHERE rn <= 3
+        GROUP BY attname,tablename
+        ) b ON a.attname = b.attname and b.tablename=a.tablename;
+EOF
+}
+
+
+run_sqlstat() {
+    local unique_query_id="$1"
+    psql -d postgres <<EOF
+\pset footer off
+\set unique_sql_id '$unique_query_id'
+\echo '======='
+\echo 'sqltext'
+\echo '======='
+\echo '                          '
+SELECT query FROM dbe_perf.statement WHERE unique_sql_id=:'unique_sql_id';
+\echo '======='
+\echo 'sqlplan'
+\echo '======='
+\echo '                          '
+SELECT to_char(max(start_time),'yyyy-mm-dd hh24:mi:ss') last_exec_time,ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')) plan_hash_value,query_plan FROM dbe_perf.statement_history WHERE unique_query_id=:'unique_sql_id' group by query_plan,ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')) order by 1;
+\echo '======================'
+\echo 'sqlstat from statement'
+\echo '======================'
+\echo '                          '
+SELECT user_name,n_calls,
+round(total_elapse_time/1e3/n_calls,1) avg_tt_ms,
+round(execution_time/1e3/n_calls,1) avg_et_ms,
+round(cpu_time/1e3/n_calls,1) avg_cpu_ms,
+round(data_io_time/1e3/n_calls,1) avg_io_ms,
+round(parse_time/1e3/n_calls,1) avg_pa_ms,
+round(plan_time/1e3/n_calls,1) avg_plan_ms,
+round(rewrite_time/1e3/n_calls,1) avg_rt_ms,
+round(pl_execution_time/1e3/n_calls,1) avg_plsql_ms,
+round(n_blocks_fetched/n_calls,1) avg_cr,
+round((n_blocks_fetched-n_blocks_hit)/n_calls,1) avg_pr,
+round(n_returned_rows/n_calls,1) avg_rows
+FROM dbe_perf.statement WHERE unique_sql_id=:'unique_sql_id';
+\echo '====================================='
+\echo 'slow statement_history from sysdate-3'
+\echo '====================================='
+\echo '                                   '
+select user_name,ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')) plan_hash_value,count(*) execs,
+round(avg(execution_time)/1e3,1) avg_et_ms,
+round(avg(cpu_time)/1e3,1) avg_cpu_ms,
+round(avg(data_io_time)/1e3,1) avg_io_ms,
+round(avg(lwlock_wait_time)/1e3,1) lwlock_wait_ms,
+round(avg(n_blocks_fetched),1) avg_cr,
+round(avg(n_blocks_fetched-n_blocks_hit),1) avg_pr,
+round(avg(n_returned_rows),1) avg_rows from dbe_perf.statement_history
+where unique_query_id=:'unique_sql_id' and is_slow_sql='t' and start_time>sysdate-3
+group by ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')),user_name;
+\echo '=============================='
+\echo 'sqlstat history from sysdate-3'
+\echo '=============================='
+\echo '                              '
+select snap_user_name uname,snap_time,n_calls,avg_tt_ms,avg_et_ms,avg_cpu_ms,avg_io_ms,avg_cr,avg_pr,avg_rows from 
+(select snap_user_name,snap_time,n_calls,
+round(total_elapse_time/1e3/n_calls,1) avg_tt_ms,
+round(execution_time/1e3/n_calls,1) avg_et_ms,
+round(cpu_time/1e3/n_calls,1) avg_cpu_ms,
+round(data_io_time/1e3/n_calls,1) avg_io_ms,
+round(n_blocks_fetched/n_calls,1) avg_cr,
+round((n_blocks_fetched-n_blocks_hit)/n_calls,1) avg_pr,
+round(n_returned_rows/n_calls,1) avg_rows
+from 
+(SELECT snap_user_name,to_char(start_ts,'yyyy-mm-dd hh24:mi:ss') snap_time,
+    snap_n_calls-coalesce(lag(snap_n_calls)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) n_calls,
+    snap_total_elapse_time-coalesce(lag(snap_total_elapse_time)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) total_elapse_time,
+    snap_execution_time-coalesce(lag(snap_execution_time)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) execution_time,
+    snap_cpu_time-coalesce(lag(snap_cpu_time)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) cpu_time,
+    snap_data_io_time-coalesce(lag(snap_data_io_time)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) data_io_time,
+    snap_n_blocks_fetched-coalesce(lag(snap_n_blocks_fetched)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) n_blocks_fetched,
+    snap_n_blocks_hit-coalesce(lag(snap_n_blocks_hit)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) n_blocks_hit,
+    snap_n_returned_rows-coalesce(lag(snap_n_returned_rows)over(partition by snap_user_name,snap_unique_sql_id order by a.snapshot_id),0) n_returned_rows
+    FROM snapshot.snap_summary_statement a,snapshot.snapshot  b
+    WHERE snap_unique_sql_id=:'unique_sql_id'
+      and a.snapshot_id=b.snapshot_id
+      and start_ts>sysdate-3) where n_calls>0 order by 2) where snap_time<(select max(start_ts) from snapshot.snapshot);
+EOF
+}
+
+run_wdr_topsql() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo 'default begin date is trunc(sysdate);default end date is trunc(sysdate)+1;default order time;default top_n 10;unit(ms)'
+\echo 'please input begin date: ' \prompt begin_date
+\echo 'please input end date: ' \prompt end_date
+\echo 'choose order by :  1 --> time '
+\echo '                   2 --> cpu  '
+\echo '                   3 --> io   '
+\echo 'please input order(1 or 2 or 3): ' \prompt orderby
+\echo 'please input top_n: ' \prompt top_n
+\echo '===================='
+\echo '   topsql summary   '
+\echo '===================='
+\echo '                          '
+with time_range as (
+SELECT snapshot_id,
+       to_char(start_ts, 'mmdd hh24:mi') || '-' || nvl(to_char(lead(start_ts) OVER (ORDER BY snapshot_id), 'hh24:mi'), to_char(now(), 'hh24:mi')) time_range, 
+           trunc(extract(epoch FROM (nvl(lead(start_ts) OVER (ORDER BY snapshot_id), now()) - start_ts))) el FROM snapshot.snapshot a
+  where to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')>=nvl(:'begin_date',to_char(trunc(now()),'yyyy-mm-dd hh24:mi:ss')) and to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')<=nvl(:'end_date',to_char(trunc(now()+1),'yyyy-mm-dd hh24:mi:ss'))),
+total_sql as (
+select snapshot_id,user_name,unique_sql_id,n_calls,round((n_blocks_fetched-n_blocks_hit)) total_pr,
+round(total_elapse_time/1e3/n_calls,1) avg_tt_ms,
+round(execution_time/1e3/n_calls,1) avg_et_ms,
+round(cpu_time/1e3/n_calls,1) avg_cpu_ms,
+round(data_io_time/1e3/n_calls,1) avg_io_ms,
+round(n_blocks_fetched/n_calls,1) avg_cr,
+round((n_blocks_fetched-n_blocks_hit)/n_calls,1) avg_pr,
+round(100*ratio_to_report(total_elapse_time)over(partition by snapshot_id),1) time_pct,
+round(100*ratio_to_report(cpu_time)over(partition by snapshot_id),1)  cpu_pct,
+round(100*ratio_to_report(data_io_time)over(partition by snapshot_id),1) io_pct,
+row_number()over(partition by snapshot_id order by total_elapse_time desc) rn
+from (select  snapshot_id,user_name,unique_sql_id,
+        n_calls-coalesce(lag(n_calls)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) n_calls,
+        total_elapse_time-coalesce(lag(total_elapse_time)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) total_elapse_time,
+        execution_time-coalesce(lag(execution_time)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) execution_time,
+        cpu_time-coalesce(lag(cpu_time)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) cpu_time,
+        data_io_time-coalesce(lag(data_io_time)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) data_io_time,
+        n_blocks_fetched-coalesce(lag(n_blocks_fetched)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) n_blocks_fetched,
+        n_blocks_hit-coalesce(lag(n_blocks_hit)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) n_blocks_hit,
+        n_returned_rows-coalesce(lag(n_returned_rows)over(partition by user_name,unique_sql_id order by a.snapshot_id),0) n_returned_rows        
+from (select t1.snapshot_id,user_name,unique_sql_id,n_calls,total_elapse_time,n_returned_rows,n_blocks_fetched,n_blocks_hit,db_time,cpu_time,execution_time,data_io_time   
+from dbe_perf.statement t,(select max(snapshot_id)+1 snapshot_id from snapshot.snap_summary_statement) t1
+union all
+select snapshot_id,snap_user_name,snap_unique_sql_id,snap_n_calls,snap_total_elapse_time,snap_n_returned_rows,snap_n_blocks_fetched,snap_n_blocks_hit,snap_db_time,snap_cpu_time,snap_execution_time,snap_data_io_time from snapshot.snap_summary_statement) a) 
+where n_calls>0)
+select t1.time_range t_range,user_name uname,unique_sql_id sql_id,n_calls calls,total_pr,avg_tt_ms avg_tt,avg_et_ms avg_et,avg_cpu_ms avg_cpu,avg_io_ms avg_io,avg_cr,avg_pr,decode(:'orderby',1,time_pct,2,cpu_pct,3,io_pct,time_pct) "pct%"
+from time_range t1 
+left join total_sql t2 on t1.snapshot_id=t2.snapshot_id
+where rn<=nvl(:'top_n',10)
+ order by 1 desc,12 desc;
+EOF
+}
+
+run_wdr_summary() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo 'please input begin date: ' \prompt begin_date
+\echo 'please input end date: ' \prompt end_date
+\echo '===================='
+\echo 'wdr workload summary'
+\echo '===================='
+\echo '                          '
+with time_range as (
+   select snapshot_id,
+           to_char(lag(start_ts) over(order by snapshot_id),'mmdd hh24:mi')||'-'||to_char(start_ts,'hh24:mi') time_range,
+           trunc(extract(epoch from (start_ts - lag(start_ts) over(order by snapshot_id)))) el
+    from snapshot.snapshot a
+  where to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')>=nvl(:'begin_date',to_char(trunc(now()),'yyyy-mm-dd hh24:mi:ss')) and to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')<=nvl(:'end_date',to_char(trunc(now()+1),'yyyy-mm-dd hh24:mi:ss'))),
+time_model as (
+select snapshot_id,
+round(sum(decode(snap_stat_name,'DB_TIME',stat_value,0))/1e6,1) db_time,
+round(sum(decode(snap_stat_name,'CPU_TIME',stat_value,0))/1e6,1) cpu_time,
+round(sum(decode(snap_stat_name,'DATA_IO_TIME',stat_value,0))/1e6,1) data_io_time,
+round(sum(decode(snap_stat_name,'EXECUTION_TIME',stat_value,0))/1e6,1) execution_time,
+round(sum(decode(snap_stat_name,'PL_EXECUTION_TIME',stat_value,0))/1e6,1) pl_execution_time,
+round(sum(decode(snap_stat_name,'PLAN_TIME',stat_value,0))/1e6,1) plan_time,
+round(sum(decode(snap_stat_name,'REWRITE_TIME',stat_value,0))/1e6,1) rewrite_time,
+round(sum(decode(snap_stat_name,'PARSE_TIME',stat_value,0))/1e6,1) parse_time,
+round(sum(decode(snap_stat_name,'PL_COMPILATION_TIME',stat_value,0))/1e6,1) pl_compilation_time,
+round(sum(decode(snap_stat_name,'NET_SEND_TIME',stat_value,0))/1e6,1) net_send_time
+from (select snapshot_id,snap_stat_name,
+      snap_value-lag(snap_value)over(partition by snap_node_name,snap_stat_name order by snapshot_id) stat_value
+          from snapshot.snap_global_instance_time)
+group by snapshot_id),
+tps as (
+select snapshot_id,trans-lag(trans)over(order by snapshot_id) total_trans,cr-lag(cr)over(order by snapshot_id) total_cr,hit-lag(hit)over(order by snapshot_id) total_hit
+from (select snapshot_id,sum(snap_xact_commit+snap_xact_rollback) trans,sum(snap_blks_read) cr,sum(snap_blks_hit) hit
+  from snapshot.snap_global_stat_database
+ group by snapshot_id)),
+sql as (
+select snapshot_id,n_calls-lag(n_calls)over(order by snapshot_id) calls,parse-lag(parse)over(order by snapshot_id) parse,hard-lag(hard)over(order by snapshot_id) hard from (
+select snapshot_id,sum(snap_n_calls) n_calls,sum(snap_n_soft_parse+snap_n_hard_parse) parse,sum(snap_n_hard_parse) hard from snapshot.snap_summary_statement group by snapshot_id)),
+iops as (
+select snapshot_id,(snap_phyrds)-lag(snap_phyrds)over(order by snapshot_id) snap_phyrds,
+                                   (snap_phywrts)-lag(snap_phywrts)over(order by snapshot_id) snap_phywrts,
+                                   (snap_phyblkrd)-lag(snap_phyblkrd)over(order by snapshot_id) snap_phyblkrd,
+                                   (snap_phyblkwrt)-lag(snap_phyblkwrt)over(order by snapshot_id) snap_phyblkwrt
+                from snapshot.snap_global_rel_iostat),
+redo as (
+select /*+leading(t1)*/ snapshot_id,redo_phywrts-lag(redo_phywrts)over(order by snapshot_id) redo_phywrts,redo_phyblkwrt-lag(redo_phyblkwrt)over(order by snapshot_id) redo_phyblkwrt
+from (select snapshot_id,sum(snap_phywrts) as redo_phywrts, sum(snap_phyblkwrt) as redo_phyblkwrt from snapshot.snap_global_file_redo_iostat group by snapshot_id))
+select time_range,round(db_time/60,1) dbtime,round(db_time/el,1) aas,round(cpu_time/60,1) cputime,round(data_io_time/60,1) iotime,round(total_trans/el,1) tps,round(total_cr/el,1) "cr/s",round((snap_phyrds+snap_phywrts)/el,1) iops,round((snap_phyblkrd+snap_phyblkwrt)*8/1024/el,1) mbps,round(redo_phyblkwrt*8/1024/el,1) "wal_mb/s",round(calls/el,1) "call/s",round(parse/el,1) "parse/s",round(hard/el,1) "hard/s"
+from time_range t1,time_model t2,tps t3,iops t4,redo t5,sql t6
+where t1.snapshot_id=t2.snapshot_id
+  and t1.snapshot_id=t3.snapshot_id
+  and t1.snapshot_id=t4.snapshot_id
+  and t1.snapshot_id=t5.snapshot_id
+  and t1.snapshot_id=t6.snapshot_id
+  and db_time>0 and length(time_range)>15 order by 1 desc;
+EOF
+}
+
+
+run_wdr_event() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo 'please input begin date: ' \prompt begin_date
+\echo 'please input end date: ' \prompt end_date
+\echo '===================='
+\echo 'wdr topevent summary'
+\echo '===================='
+\echo '                          '
+with time_range as (
+    select snapshot_id, time_range, el
+    from (
+        select snapshot_id,
+               to_char(lag(start_ts) over(order by snapshot_id),'mmdd hh24:mi')||'-'||to_char(start_ts,'hh24:mi') time_range,
+               trunc(extract(epoch from (start_ts - lag(start_ts) over(order by snapshot_id)))) el
+        from snapshot.snapshot a where to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')>=nvl(:'begin_date',to_char(trunc(now()),'yyyy-mm-dd hh24:mi:ss')) and to_char(start_ts,'yyyy-mm-dd hh24:mi:ss')<=nvl(:'end_date',to_char(trunc(now()+1),'yyyy-mm-dd hh24:mi:ss'))
+    ) t
+    where length(time_range)>15
+),
+time_model as (
+    select snapshot_id,
+    sum(decode(snap_stat_name,'DB_TIME',stat_value,0)) db_time,
+    sum(decode(snap_stat_name,'CPU_TIME',stat_value,0)) cpu_time
+    from (select snapshot_id,snap_stat_name,
+          snap_value-lag(snap_value)over(partition by snap_node_name,snap_stat_name order by snapshot_id) stat_value
+              from snapshot.snap_global_instance_time)
+    group by snapshot_id
+),
+all_events as (
+    select snapshot_id, 'CPU time' as event, '' as event_type,cpu_time as wait_time, null as waits, 1 as is_cpu
+    from time_model
+    
+    union all
+    
+    select snapshot_id, event, event_type,wait_time, waits, 0 as is_cpu
+    from (
+        select snapshot_id, event, event_type,wait_time, waits, 
+               row_number() over(partition by snapshot_id order by wait_time desc) rn 
+        from (
+            select snapshot_id, snap_event as event, snap_type as event_type,
+                   snap_total_wait_time - coalesce(lag(snap_total_wait_time) over(partition by snap_event order by snapshot_id), 0) wait_time, 
+                   snap_wait - coalesce(lag(snap_wait) over(partition by snap_event order by snapshot_id), 0) waits
+            from snapshot.snap_global_wait_events 
+            where snap_event not in ('none','wait cmd')
+        ) where waits > 0
+    ) where rn <= 9
+),
+ranked_events as (
+    select snapshot_id, event,event_type, wait_time, waits, is_cpu,
+           row_number() over(partition by snapshot_id order by wait_time desc) as rn
+    from all_events 
+)
+select /*+set(enable_mergejoin off) set(enable_nestloop off) set(enable_index_nestloop off)*/time_range, round(db_time/1e6,1) db_time_s, 
+       event, 
+	   event_type,
+       round(wait_time/1e6,1) wait_time_s, 
+       waits, 
+       case when is_cpu = 1 then null else round(wait_time/waits/1e3,1) end as avg_wait_ms,
+	   round(100*(wait_time/db_time),1)||'%' db_time_pct
+from time_range a, time_model b, ranked_events c 
+where a.snapshot_id = b.snapshot_id 
+  and a.snapshot_id = c.snapshot_id
+  and c.rn<=5
+order by a.time_range, c.rn;
+EOF
+}
+
+run_as() {
+    local pid="$1"
+    if [ -z "$pid" ]; then
+        echo "Error: Please specify <vastbase_pid>" >&2
+        as_help
+        exit 1
+    fi
+
+    psql -d postgres <<EOF
+\pset footer off
+\echo '================================'
+\echo 'active session info(limit 30)   '
+\echo '================================'
+SELECT a.datname || ':' ||':'||client_addr client_info,
+        a.sessionid||':'||decode(w.block_sessionid,null,'not wait',w.block_sessionid) sid_bsid
+        ,a.unique_sql_id
+        ,w.wait_event
+        ,round(EXTRACT(EPOCH FROM (now() - query_start))) etime
+        ,decode(STATE, 'active', 'a', 'idle in transaction', 'it', 'idle in transaction (aborted)', 'ita') || ':' || decode(waiting, 'true', 't', 'f') state
+        ,substr( REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) sqltext
+FROM pg_stat_activity a left join dbe_perf.thread_wait_status w on a.sessionid = w.sessionid
+WHERE   a.STATE NOT IN ('idle')
+        AND a.datname NOT IN ('postgres')
+        AND round(EXTRACT(EPOCH FROM (now() - query_start)),2)>=0.1
+ORDER BY etime DESC nulls last limit 30;
+
+\echo '========================================'
+\echo 'client connection info  '
+\echo '========================================'
+
+select client_addr,application_name,state,count(*) cnt from pg_stat_activity where client_addr is not null group by client_addr,state,application_name order by 3,4 desc;
+
+\echo '========================================'
+\echo 'session state info  '
+\echo '========================================'
+
+select state,count(*) cnt from pg_stat_activity where client_addr is not null group by state order by 1;
+
+\echo '=============================================='
+\echo 'top 10 running slow sql(sqlid duration>=1s)   '
+\echo '=============================================='
+
+SELECT datname||':'||usename username,unique_sql_id,round(sum(EXTRACT(EPOCH FROM now() - query_start)),2) total_duration_s,count(*) run_cnt FROM  pg_stat_activity
+WHERE EXTRACT(EPOCH FROM now() - query_start)>=1 and state='active' and datname not in ('postgres')
+group by datname,usename,unique_sql_id
+order by 3 desc,4 desc limit 10;
+
+\echo '=========================================='
+\echo 'top 10 running slow sql(text duration>=1s)   '
+\echo '=========================================='
+
+SELECT datname||':'||usename username,round(sum(EXTRACT(EPOCH FROM now() - query_start)),2) total_duration_s,count(*) run_cnt,substr(REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,200) sql_text FROM  pg_stat_activity
+WHERE EXTRACT(EPOCH FROM now() - query_start)>=1 and state='active' and datname not in ('postgres')
+group by datname,usename,substr(REGEXP_REPLACE(REGEXP_REPLACE(query, '(\r|\n)+', ' '),' {2,}', ' '),1,200)
+order by 2 desc,3 desc limit 10;
+EOF
+
+echo '=========================================='
+echo '      top 20 cpu usage thread info        '
+echo '=========================================='
+psql -d postgres -c "with tmp as (SELECT split_part(result, ',', 1) AS lwpid, split_part(result, ',', 2) AS cpu_usage FROM unnest(string_to_array('$(top -b -n1 -H -p $pid | awk '/^ *PID USER.*COMMAND$/ {getline; while (getline) print $1 "," $9}'| paste -sd ";")', ';')) AS result) select tmp.cpu_usage,a.unique_sql_id,s.pid,s.lwpid,s.thread_name, a.query_start::timestamp(0) query_start,a.state,substr(a.query,1,50) sqltext from pg_os_threads s join tmp on s.lwpid=tmp.lwpid  left join pg_stat_activity a on s.pid=a.pid where 1=1 order by tmp.cpu_usage desc limit 20"
+
+echo '=========================================='
+echo '      top 20 I/O usage thread info        '
+echo '=========================================='
+export S_TIME_FORMAT=ISO
+psql -d postgres -c "with tmp as (SELECT split_part(result, ',', 1) AS lwpid, split_part(result, ',', 2) AS kb_rd,split_part(result, ',', 3) AS kb_wr FROM unnest(string_to_array('$(pidstat -hdt -p $pid  | awk 'NR>4 {print $4 "," $5 "," $6}' | paste -sd ";")', ';')) AS result) select tmp.kb_rd,tmp.kb_wr,a.unique_sql_id,s.pid,s.lwpid,s.thread_name, a.query_start::timestamp(0) query_start,a.state,substr(a.query,1,50) sqltext from pg_os_threads s join tmp on s.lwpid=tmp.lwpid left join pg_stat_activity a on s.pid=a.pid where 1=1 order by tmp.kb_rd+tmp.kb_wr desc limit 20" 
+}
+
+run_sp() {
+    local param="$1"
+    if [ -z "$param" ]; then
+        echo "Error: sp param" >&2
+        sp_help
+        exit 1
+    fi
+    
+    psql -d postgres <<EOF
+\pset footer off
+\set name '$param'
+\echo '=========================='
+\echo 'show parameter from sp'
+\echo '=========================='
+SELECT name,decode(unit,'8kB',setting*8||'kB',setting||nvl(unit,' ')) setting,context,short_desc FROM pg_settings WHERE name LIKE '%' || :'name' || '%';
+EOF
+}
+
+run_st() {
+    local param="$1"
+    if [ -z "$param" ]; then
+        echo "Error: st relname" >&2
+        st_help
+        exit 1
+    fi
+    
+    psql -d postgres <<EOF
+\pset footer off
+\set name '$param'
+\echo '=========================='
+\echo 'show table/view from st   '
+\echo '=========================='
+SELECT n.nspname AS "Schema",c.relname,decode(c.relkind,'r','table','v','view') type FROM pg_class c join pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE c.relname LIKE '%' || :'name' || '%' and c.relkind in ('r','v');
+EOF
+}
+
+run_tabsize(){
+while getopts "a:d:s:t:n:" opt; do
+  case $opt in
+    a) all="$OPTARG" ;;
+    d) dbname="$OPTARG" ;;
+    s) schemaname="$OPTARG" ;;
+    t) tablename="$OPTARG" ;;
+    n) number="$OPTARG" ;;
+    *) echo "Usage: $0 -a all -d dbname -s schemaname -t tablename -n number" && exit 1 ;;
+  esac
+done
+
+dbcondition="AND 1=1"
+schemacondition="AND 1=1"
+tablecondition="AND 1=1"
+
+if [ -z "$number" ]; then
+   echo "错误: 必需的选项 -n 未提供。"
+   echo "-n number, e.g:-n 5"
+   exit 1 # 非零退出码表示错误
+fi
+
+# 检查是否传入参数
+if [ -n "$dbname" ]; then
+    dbcondition="AND D.datname='${dbname}'"
+fi
+
+if [ -n "$all" ]; then
+    dbname="postgres"
+    dbcondition="AND 1=1"
+    schemacondition="AND 1=1"
+    tablecondition="AND 1=1"
+fi
+
+echo "dbname is ${dbname}"
+
+if [ -n "$schemaname" ]; then
+    schemacondition="AND N.nspname='${schemaname}'"
+fi
+
+if [ -n "$tablename" ]; then
+    tablecondition="AND C.relname='${tablename}'"
+fi
+
+if [ -n "$number" ]; then
+    number=${number}
+fi
+
+cat <<EOF > /tmp/query.sql
+
+select dbname, schemaname, tablename,
+pg_size_pretty(table_size) as "table_size",
+pg_size_pretty(indexes_size) as "indexes_size", 
+pg_size_pretty(toast_size) as "toast_size", 
+pg_size_pretty(toast_indexes_size) as "toast_indexes_size",
+pg_size_pretty(total_size) AS "total_size"
+from 
+(
+SELECT
+    D.datname as "dbname",
+    N.nspname as "schemaname",
+    C.relname AS "tablename",
+    case when exists(select inhparent from pg_inherits where C.oid=inhparent)
+    then
+    (
+    select pg_table_size(C.oid)+sum(pg_table_size(t.partition_name::regclass)) 
+    from 
+      (
+        SELECT
+           c.relname AS partition_name
+        FROM
+             pg_inherits i
+        JOIN
+             pg_class c ON c.oid = i.inhrelid
+        JOIN
+             pg_class pc ON pc.oid = i.inhparent    
+      ) t
+    )
+    else
+    (pg_table_size(C.oid))
+    end AS "table_size"    ,
+    pg_indexes_size(C.oid) as "indexes_size",   
+    pg_table_size(C.reltoastrelid) as "toast_size",
+    pg_indexes_size(C.reltoastrelid) as "toast_indexes_size",
+    case when exists(select inhparent from pg_inherits where C.oid=inhparent)
+    then
+    (
+    select pg_total_relation_size(C.oid)+sum(pg_total_relation_size(t.partition_name::regclass)) 
+    from 
+      (
+        SELECT
+           c.relname AS partition_name
+        FROM
+             pg_inherits i
+        JOIN
+             pg_class c ON c.oid = i.inhrelid
+        JOIN
+             pg_class pc ON pc.oid = i.inhparent    
+      ) t
+    )
+    else
+    (pg_total_relation_size(C.oid))
+    end AS "total_size"    
+FROM
+    pg_class C 
+LEFT JOIN
+    pg_namespace N ON (N.oid = C.relnamespace)
+left join 
+    pg_database D on D.datname not in ('template0','template1') 
+WHERE
+    Not exists(select inhrelid from pg_inherits where C.oid=inhrelid)
+    AND nspname NOT IN ('pg_catalog', 'information_schema','snapshot')
+    AND C.relkind in ('r','l')
+    AND nspname !~ '^pg_toast'    
+    ${dbcondition}
+    ${schemacondition}
+    ${tablecondition}
+ORDER BY
+    total_size DESC
+limit ${number} 
+)tt;
+
+EOF
+
+psql -d ${dbname} -f /tmp/query.sql 
+
+}
+
+run_repl() {
+psql -d postgres -c "
+COPY (
+  SELECT slot_name, pg_current_xlog_location(), receiver_replay_location
+  FROM pg_stat_replication a, pg_replication_slots b
+  WHERE a.application_name LIKE '%'||b.slot_name||'%' 
+  AND slot_type='physical'
+) TO '/home/vastbase/repl.txt' WITH DELIMITER ',';
+" >/dev/null 2>&1
+
+sleep 5
+
+psql -d postgres "
+WITH aa AS (
+  SELECT 
+    split_part(result, ',', 1) AS slot_name,
+    split_part(result, ',', 2) AS prim_curr_loc,
+    split_part(result, ',', 3) AS recv_replay_loc 
+  FROM unnest(string_to_array('$(cat /home/vastbase/repl.txt | paste -sd ';')', ';')) AS result
+)
+SELECT 
+  split_part(client_addr::text,'/',1)||'-'||b.slot_name||'('||
+    CASE WHEN active='t' THEN 'active' ELSE 'inactive' END||')' AS replslot,
+  state||'-'||
+    CASE 
+      WHEN sync_state='Sync' THEN sync_state||'('||sync_priority||')' 
+      ELSE sync_state 
+    END AS state,
+  pg_current_xlog_location() AS prim_curr_loc,
+  receiver_flush_location AS recv_flush_loc,
+  receiver_replay_location AS recv_replay_loc,
+  restart_lsn,
+  pg_size_pretty(round((pg_xlog_location_diff(pg_current_xlog_location(), aa.prim_curr_loc))/5)) AS wal_rate_s,
+  pg_size_pretty(round((pg_xlog_location_diff(receiver_replay_location, aa.recv_replay_loc))/5)) AS repl_rate_s,
+  pg_size_pretty(pg_xlog_location_diff(pg_current_xlog_location(), receiver_replay_location)) AS repl_lag
+FROM pg_stat_replication a, pg_replication_slots b, aa
+WHERE a.application_name LIKE '%'||b.slot_name||'%' 
+  AND slot_type='physical' 
+  AND aa.slot_name=b.slot_name
+"
+}
+
+run_slow() {
+    psql -d postgres <<EOF
+\pset footer off
+\echo 'Default begin date: trunc(now()-5/24/60,'MI')'
+\echo 'Default end date: trunc(now()+1/24/60,'MI')'
+\echo 'Default top_n: 10'
+\prompt 'Enter begin date: ' begin_date
+\prompt 'Enter end date: ' end_date
+\prompt 'Enter top_n: ' top_n
+\echo '===================='
+\echo '   top slow sql     '
+\echo '===================='
+select start_time,user_name||' '||schema_name user_name,unique_query_id,execs,db_ms,et_ms,cpu_ms,io_ms,parse_ms,avg_cr,avg_pr,rows from(
+select substr(trunc(start_time,'MI'),1,19) start_time,user_name,schema_name,unique_query_id,ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')) plan_hash_value,count(*) execs,
+sum(db_time) total_db_ms,
+round(avg(db_time)/1e3,1) db_ms,
+round(avg(execution_time)/1e3,1) et_ms,
+round(avg(cpu_time)/1e3,1) cpu_ms,
+round(avg(data_io_time)/1e3,1) io_ms,
+round(avg(parse_time+plan_time+rewrite_time)/1e3,1) parse_ms,
+round(avg(n_blocks_fetched),1) avg_cr,
+round(avg(n_blocks_fetched-n_blocks_hit),1) avg_pr,
+round(avg(n_returned_rows),1) rows ,
+row_number()over(partition by substr(trunc(start_time,'MI'),1,19) order by sum(db_time) desc) rn
+from pg_catalog.statement_history
+where start_time between nvl(:'begin_date',to_char(trunc(now()-5/24/60,'MI'),'yyyy-mm-dd hh24:mi:ss')) and nvl(:'end_date',to_char(trunc(now()+1/24/60,'MI'),'yyyy-mm-dd hh24:mi:ss')) and is_slow_sql='t'
+group by substr(trunc(start_time,'MI'),1,19),user_name,schema_name,unique_query_id,ora_hash(regexp_replace(query_plan,'\(cost=.*?\)','','g')))
+where rn<=nvl(:'top_n',10)
+order by 1,execs*db_ms desc;
+EOF
+}
+
+run_xloghc() {
+    psql -q -d postgres -c "
+DO \$\$
+DECLARE
+    db_role varchar;
+    current_redo_lsn varchar;
+    checkpoint_redo_lsn varchar;
+    checkpoint_lsn varchar;
+    cbmtrackedlsn varchar;
+    min_restart_lsn varchar;
+    min_standby_replay_location varchar;
+    min_need_archive varchar;
+    last_archive_done varchar;
+    max_xlog varchar;
+    timeline_id integer;
+    min_xlog varchar;
+    xlog_count integer;
+    keep_xlog_count integer;
+    total_xlog_size numeric;
+    checkpoint_lsn_lag varchar;
+    cbmtracked_lsn_lag varchar;
+    min_xlog_time timestamp;
+    max_xlog_time timestamp;
+    TYPE setting_rec IS RECORD (
+        name text,
+        setting text
+    );
+    rec setting_rec;
+    diff_ckpt_count numeric;
+    diff_arch_count numeric;
+    diff_restart_count numeric;
+    diff_cbm_count numeric;
+    diff_replay_count numeric;
+    healthy_state varchar;
+    xlog_count_limit numeric;
+    v_cnt integer;
+    db_version varchar;
+BEGIN
+
+    min_xlog_time='';
+    max_xlog_time='';
+    
+    select count(*) into v_cnt from pg_proc where proname='vb_version';
+    IF v_cnt>0 then
+    select replace(replace(REGEXP_SUBSTR(vb_version(), '^(.*?)(?= compiled)', 1, 1, NULL, 1),'(',''),')','')||' patch '||REGEXP_SUBSTR(vb_version(), 'patch:(\d+)', 1, 1, NULL, 1)||' commit '||REGEXP_SUBSTR(vb_version(), 'commit (\S+)', 1, 1, NULL, 1) into db_version;
+    ELSE
+    select count(*) into v_cnt from pg_proc where proname='pw_version';
+    IF v_cnt>0 then 
+    select replace(replace(REGEXP_SUBSTR(pw_version(), '^(.*?)(?= compiled)', 1, 1, NULL, 1),'(',''),')','')||' commit '||REGEXP_SUBSTR(pw_version(), 'commit (\S+)', 1, 1, NULL, 1) into db_version;
+    ELSE
+    select replace(replace(REGEXP_SUBSTR(version(), '^(.*?)(?= compiled)', 1, 1, NULL, 1),'(',''),')','')||' commit '||REGEXP_SUBSTR(version(), 'commit (\S+)', 1, 1, NULL, 1) into db_version;
+    END IF;
+    END IF;
+    
+    select (select setting+1 from pg_settings where name='wal_keep_segments') +
+           (select 2*setting from pg_settings where name='checkpoint_segments') into xlog_count_limit;
+           
+    select decode(pg_is_in_recovery(), 'f', 'Primary', 'Standby'),
+           decode(pg_is_in_recovery(), 'f', pg_current_xlog_location(),(select receiver_received_location from pg_stat_get_wal_receiver())) current_redo_lsn,
+           upper(nvl(substr(to_hex(redo_lsn), 1, length(to_hex(redo_lsn))-8), '0') || '/' || substr(lpad(to_hex(redo_lsn),8,0), -8)) checkpoint_redo_lsn,
+           upper(nvl(substr(to_hex(checkpoint_lsn), 1, length(to_hex(checkpoint_lsn))-8), '0') || '/' || substr(lpad(to_hex(checkpoint_lsn),8,0), -8)) checkpoint_lsn,
+           decode(nvl(ltrim(regexp_substr(pg_cbm_tracked_location(), '[^/]+', 1, 1), '0'), '0') || '/' || regexp_substr(pg_cbm_tracked_location(), '[^/]+', 1, 2),
+                  '0/', '', nvl(ltrim(regexp_substr(pg_cbm_tracked_location(), '[^/]+', 1, 1), '0'), '0') || '/' || regexp_substr(pg_cbm_tracked_location(), '[^/]+', 1, 2)) cbmtrackedlsn,
+           (select min(restart_lsn) from pg_replication_slots) min_restart_lsn,
+           decode(pg_is_in_recovery(), 'f', (select min(receiver_replay_location) from pg_stat_get_wal_senders()),
+           (select min(receiver_replay_location) from pg_stat_get_wal_receiver())) min_standby_replay_location,
+           (select * from pg_ls_dir('pg_xlog/archive_status/') where pg_ls_dir like '%ready' order by 1 limit 1),
+           (select * from pg_ls_dir('pg_xlog/archive_status/') where pg_ls_dir like '%done' order by 1 desc limit 1),
+           timeline_id
+    from pg_control_checkpoint()
+    into db_role, current_redo_lsn, checkpoint_redo_lsn, checkpoint_lsn, cbmtrackedlsn, min_restart_lsn,
+         min_standby_replay_location, min_need_archive, last_archive_done, timeline_id;
+    
+    select count(*) into v_cnt from pg_proc where proname='pg_ls_waldir';
+    
+    IF v_cnt>0 then 
+    
+        select min_xlog,min_xlog_time from (select name min_xlog, modification min_xlog_time from pg_ls_waldir() where name not like '%backup%' order by 2 limit 10) order by 1 limit 1 into min_xlog,min_xlog_time;
+        select name max_xlog, modification max_xlog_time from pg_ls_waldir() where name not like '%backup%' order by 2 desc limit 1 into max_xlog,max_xlog_time;
+        select count(*) xlog_count, sum(size) total_xlog_size from pg_ls_waldir() where name not like '%backup%' into xlog_count,total_xlog_size;
+             
+    ELSE
+    
+        select * from pg_ls_dir('pg_xlog') where pg_ls_dir  not like '%backup%' and pg_ls_dir not like '%archive_s%' order by 1 limit 1 into min_xlog;
+        select lpad(timeline_id, 8, '0') ||
+                           lpad(regexp_substr(current_redo_lsn, '[^/]+', 1, 1), 8, '0') ||
+                           lpad(substr(regexp_substr(current_redo_lsn, '[^/]+', 1, 2), 1, 2), 8, '0') into max_xlog;
+        select count(*),count(*)*16*1024*1024 from pg_ls_dir('pg_xlog') where pg_ls_dir  not like '%backup%' and pg_ls_dir not like '%archive_s%' into xlog_count,total_xlog_size;
+    
+    END IF;
+    
+    select 1+to_number(substr(max_xlog,9,8)||substr(max_xlog,-2,2),'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx')-to_number(substr(min_xlog,9,8)||substr(min_xlog,-2,2),'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') into keep_xlog_count;
+    select round(pg_xlog_location_diff(current_redo_lsn, checkpoint_redo_lsn)/16/1024/1024) into diff_ckpt_count;
+    select round(nvl(pg_xlog_location_diff(current_redo_lsn, cbmtrackedlsn)/16/1024/1024, 0)) into diff_cbm_count;
+    select round(nvl(pg_xlog_location_diff(current_redo_lsn, min_restart_lsn)/16/1024/1024, 0)) into diff_restart_count;
+    select round(nvl(pg_xlog_location_diff(current_redo_lsn, min_standby_replay_location)/16/1024/1024, 0)) into diff_replay_count;
+    select nvl(to_number(substr(max_xlog, 9, 8) || substr(max_xlog, -2, 2), 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx') -
+               to_number(substr(nvl(replace(min_need_archive, '.ready', ''), replace(last_archive_done, '.done', '')), 9, 8) ||
+                         substr(nvl(replace(min_need_archive, '.ready', ''), replace(last_archive_done, '.done', '')),-2, 2),
+               'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'), 0) into diff_arch_count;
+
+    if diff_ckpt_count >= xlog_count_limit then
+        healthy_state = '                    checkpoint lag,keep '||diff_ckpt_count||' xlogs'||CHR(10) ||healthy_state;
+    end if;
+    if diff_cbm_count >= xlog_count_limit then
+        healthy_state = '                    cbm lag,keep '||diff_cbm_count||' xlogs'|| CHR(10) ||healthy_state;
+    end if;
+    if diff_restart_count >= xlog_count_limit then
+        healthy_state = '                    restart lsn lag,keep '||diff_restart_count||' xlogs' || CHR(10) || healthy_state;
+    end if;
+    if diff_arch_count >= xlog_count_limit then
+        healthy_state = '                    archive lag,keep '||diff_arch_count||' xlogs' || CHR(10) || healthy_state;
+    end if;
+    if diff_replay_count >= xlog_count_limit then
+        healthy_state = '                    standby replay lag, keep '||diff_replay_count||' xlogs '|| CHR(10) || healthy_state;
+    end if;
+
+    RAISE INFO 'Xlog Healthy Summary:';
+    RAISE INFO '---------------------';
+    RAISE INFO '  Pgxc Node Name: %', (select get_nodename());
+    RAISE INFO '   Database Role: %', db_role;
+    RAISE INFO 'Database Version: %', db_version;
+    RAISE INFO '    Current Redo: %, Last Modify Time: %', max_xlog, max_xlog_time;
+    RAISE INFO '     Oldest Xlog: %, Last Modify Time: %', min_xlog, min_xlog_time;
+    RAISE INFO ' Keep Xlog Count: %', keep_xlog_count;
+    RAISE INFO 'Total Xlog Count: %', xlog_count;
+    RAISE INFO '  Keep Xlog Size: %', pg_size_pretty(keep_xlog_count*16*1024*1024::numeric);
+    RAISE INFO ' Total Xlog Size: %', pg_size_pretty(total_xlog_size);
+    RAISE INFO '   Health Status: %', rtrim(ltrim(nvl(healthy_state, 'healthy')), ',');
+    RAISE INFO '                    ';
+    RAISE INFO 'Xlog Healthy Detail:';
+    RAISE INFO '---------------------';
+    RAISE INFO 'Current Redo LSN: %, Checkpoint Redo LSN: %, Checkpoint LSN: %', current_redo_lsn, checkpoint_redo_lsn, checkpoint_lsn;
+    RAISE INFO 'CBM Tracked LSN: %, CBM Tracked WAL: %', cbmtrackedlsn, decode(lpad(timeline_id, 8, '0') ||
+                           lpad(regexp_substr(cbmtrackedlsn, '[^/]+', 1, 1), 8, '0') ||
+                           lpad(substr(regexp_substr(cbmtrackedlsn, '[^/]+', 1, 2), 1, 2), 8, '0'), lpad(timeline_id, 8, '0'),NULL,lpad(timeline_id, 8, '0') ||
+                           lpad(regexp_substr(cbmtrackedlsn, '[^/]+', 1, 1), 8, '0') ||
+                           lpad(substr(regexp_substr(cbmtrackedlsn, '[^/]+', 1, 2), 1, 2), 8, '0'));
+    RAISE INFO 'Min Restart LSN: %, Min Restart WAL: %', min_restart_lsn,
+               decode(lpad(timeline_id, 8, '0') ||
+                    lpad(regexp_substr(min_restart_lsn, '[^/]+', 1, 1), 8, '0') ||
+                    lpad(substr(regexp_substr(min_restart_lsn, '[^/]+', 1, 2), 1, 2), 8, '0'), lpad(timeline_id, 8, '0'),NULL,lpad(timeline_id, 8, '0') ||
+                    lpad(regexp_substr(min_restart_lsn, '[^/]+', 1, 1), 8, '0') ||
+                    lpad(substr(regexp_substr(min_restart_lsn, '[^/]+', 1, 2), 1, 2), 8, '0'));
+    RAISE INFO 'Min Standby Replay LSN: %, Min Standby Replay WAL: %', min_standby_replay_location,
+                decode(lpad(timeline_id, 8, '0') ||
+                    lpad(regexp_substr(min_standby_replay_location, '[^/]+', 1, 1), 8, '0') ||
+                    lpad(substr(regexp_substr(min_standby_replay_location, '[^/]+', 1, 2), 1, 2), 8, '0'),lpad(timeline_id, 8, '0'), NULL,lpad(timeline_id, 8, '0') ||
+                    lpad(regexp_substr(min_standby_replay_location, '[^/]+', 1, 1), 8, '0') ||
+                    lpad(substr(regexp_substr(min_standby_replay_location, '[^/]+', 1, 2), 1, 2), 8, '0'));
+    RAISE INFO 'Min Need Archive: %, Last Archive Done: %', replace(min_need_archive, '.ready', ''),
+               replace(last_archive_done, '.done', '');
+    
+    select count(*) into v_cnt from pg_proc where proname='gs_xlog_keepers';
+    
+    IF v_cnt>0 then 
+    RAISE INFO '                    ';
+    FOR i IN (select keeptype,keepsegment,describe from gs_xlog_keepers() order by 2) LOOP
+    RAISE INFO '%: % (%)',lpad(i.keeptype,25,' '),i.keepsegment,i.describe;
+    END LOOP;
+    END IF;
+    
+    RAISE INFO '                    ';
+    RAISE INFO '  Guc Parameter(checkpoint):';
+    FOR rec IN
+        SELECT name, decode(unit, '8kB', setting*8 || 'kB', setting || nvl(unit, ' ')) setting
+        FROM pg_settings
+        WHERE name in ('enable_incremental_checkpoint', 'checkpoint_completion_target', 'checkpoint_segments',
+                        'checkpoint_timeout', 'checkpoint_wait_timeout', 'pagewriter_thread_num',
+                        'pagewriter_sleep', 'bgwrite_sleep', 'bgwrite_delay', 'max_io_capacity')
+    LOOP
+        RAISE INFO '%: %', lpad(rec.name, 35, ' '), rec.setting;
+    END LOOP;
+
+    RAISE INFO '  Guc Parameter(archive):';
+    FOR rec IN
+        SELECT name, decode(unit, '8kB', setting*8 || 'kB', setting || nvl(unit, ' ')) setting
+        FROM pg_settings
+        WHERE name in ('archive_command', 'archive_mode', 'archive_interval', 'max_standby_archive_delay')
+    LOOP
+        RAISE INFO '%: %', lpad(rec.name, 35, ' '), rec.setting;
+    END LOOP;
+
+    RAISE INFO '  Guc Parameter(wal):';
+    FOR rec IN
+        SELECT name, decode(unit, '8kB', setting*8 || 'kB', setting || nvl(unit, ' ')) setting
+        FROM pg_settings
+        WHERE name in ('advance_xlog_file_num', 'enable_xlog_prune', 'max_size_for_xlog_prune', 'max_wal_senders',
+                        'wal_keep_segments', 'recovery_min_apply_delay', 'wal_flush_delay', 'wal_flush_timeout')
+    LOOP
+        RAISE INFO '%: %', lpad(rec.name, 35, ' '), rec.setting;
+    END LOOP;
+
+    RAISE INFO '  Guc Parameter(cbm/dcf/repl):';
+    FOR rec IN
+        SELECT name, decode(unit, '8kB', setting*8 || 'kB', setting || nvl(unit, ' ')) setting
+        FROM pg_settings
+        WHERE (name IN ('enable_cbm_tracking', 'enable_dcf', 'recovery_max_workers', 'recovery_parse_workers', 'recovery_redo_workers')
+               OR name LIKE 'replconninfo%') AND LENGTH(setting) > 0
+    LOOP
+        IF rec.name LIKE 'replconninfo%' THEN
+            RAISE INFO '%: %', lpad(rec.name, 35, ' '), substr(rec.setting, 1, 100);
+            RAISE INFO '%', lpad(' ', 37, ' ') || substr(rec.setting, 101, 100);
+        ELSE
+            RAISE INFO '%: %', lpad(rec.name, 35, ' '), rec.setting;
+        END IF;
+    END LOOP;
+END \$\$;
+" 2>&1 | awk '{gsub(/INFO:/, ""); print}'
+}
+
+run_analyze() {
+    # Check if python3 is available
+    if ! command -v python3 &> /dev/null; then
+        echo "Error: python3 is required for log analysis but not found" >&2
+        exit 1
+    fi
+
+    # Create a temporary python script
+    TEMP_SCRIPT=$(mktemp)
+    cat << 'EOF' > "$TEMP_SCRIPT"
+#!/usr/bin/env python3
+
+import re
+import sys
+import argparse
+from itertools import groupby
+from statistics import mean
+from datetime import datetime
+import os
+
+# Argument parsing
+parser = argparse.ArgumentParser(description='Process to get log auto plan')
+parser.add_argument('-f', '--file', type=str, help="The input file")
+parser.add_argument('-b', '--begin', type=str, help="The input start time")
+parser.add_argument('-e', '--end', type=str, help="The input end time")
+parser.add_argument('-t', '--type', type=str, help="Analyze type (plan or slow, default: slow)")
+parser.add_argument('--encode', type=str, default='utf8', help="file charset,such as gbk,utf8 and so on, default: utf8")
+parser.add_argument('-o', '--output', type=str, choices=['html', 'csv', 'txt'], default='html', help="Output format (default: html)")
+args = parser.parse_args()
+
+if not args.file:
+    print("Error: -f (file) parameter is required.", file=sys.stderr)
+    sys.exit(1)
+
+# Helper function to parse date strings
+def parse_datetime(date_str):
+    formats = [
+        '%Y-%m-%d %H:%M:%S.%f', 
+        '%Y-%m-%d %H:%M:%S', 
+        '%Y-%m-%d %H:%M', 
+        '%Y-%m-%d %H'
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    return None
+
+# Read the log file content
+try:
+    with open(args.file, "r", encoding=args.encode) as file:
+        content = file.read()
+except Exception as e:
+    print(f"Error reading file: {e}", file=sys.stderr)
+    sys.exit(1)
+
+# Regular expression to split logs by timestamps
+pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) '
+blocks = re.split(pattern, content)[1:]
+
+# Parse start and end times
+start_n = 0
+if args.begin:
+    v_begin = parse_datetime(args.begin)
+    if v_begin < parse_datetime(blocks[0]):
+        start_n = 0
+    else:
+        for i in range(0, len(blocks)-2, 2):
+            timestamp1 = parse_datetime(blocks[i])
+            timestamp2 = parse_datetime(blocks[i+2])
+            if v_begin <= timestamp2 and v_begin >= timestamp1:
+                start_n = i
+                break
+
+if args.end:
+    v_end = parse_datetime(args.end)
+    matching_index = -2
+    for i in range(len(blocks)-2, -2, -2):
+        time_value = parse_datetime(blocks[i])
+        if time_value <= v_end:
+            matching_index = i
+            break
+    if matching_index != -2:
+        blocks = blocks[:matching_index+2]
+
+# Set the analysis type
+e_type = args.type if args.type else 'slow'
+
+# Initialize the list for collecting query details
+total_list = []
+
+# Parse logs for nested query plans
+def parse_nested(start_n, blocks):
+    pattern = r'(\d{1,3}\.){3}\d{1,3}\(\d+\)|[local]'
+    for i in range(start_n, len(blocks), 2):
+        timestamp = blocks[i]
+        timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
+        log_block = blocks[i + 1]
+
+        if "-----NestLevel:" in log_block and "Query Text:" in log_block:
+            query_plan_content = re.split(r'Query Text:', log_block, flags=re.IGNORECASE)[1]
+            query_plan_before = re.split(r'Query Text:', log_block, flags=re.IGNORECASE)[0]
+            v_log_list = re.split(r'\s+', query_plan_before, flags=re.IGNORECASE)
+            IP, database, user = query_plan_before.split()[:3]
+            match = re.search(pattern, IP)
+            if not match:
+                user, database, IP = query_plan_before.split()[:3]
+            query_id = v_log_list[4]
+            v_plan_list = re.split(r'Name:.*', query_plan_content)
+            query_text = v_plan_list[0]
+            query_plan = v_plan_list[1]
+            duration = None
+            for j in range(i+2, len(blocks), 2):
+                timestamp = blocks[j]
+                timestamp = datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f')
+                log_block = blocks[j + 1]
+                if v_log_list[-2] in log_block and "duration:" in log_block and query_id in log_block:
+                    duration = re.split(r'duration:', log_block, flags=re.IGNORECASE)[1].strip().strip('s')
+                    duration = float(duration.strip())
+                    break
+            if duration is None:
+                if i+1 <= len(blocks):
+                    print('Warning: not found end for:', blocks[i], blocks[i+1], file=sys.stderr)
+                else:
+                    print('Error: not found end for:', blocks[i], file=sys.stderr)
+                continue
+            total_list.append({
+                'time': timestamp, 
+                'qry_text': query_text, 
+                'qry_plan': query_plan, 
+                'IP': IP, 
+                'database': database, 
+                'user': user,
+                'duration': duration, 
+                'unique_id': ''
+            })
+
+# Parse logs for slow queries
+def parse_slow_sql(start_n, blocks):
+    pattern = r'(\d{1,3}\.){3}\d{1,3}\(\d+\)'
+    for i in range(start_n, len(blocks), 2):
+        timestamp = parse_datetime(blocks[i])
+        log_block = blocks[i + 1]
+        if "duration:" in log_block and ("execute" in log_block):
+            query_content = re.split(r'execute |duration:|unique id|statement:', log_block, flags=re.IGNORECASE)
+            content0 = query_content[0].split()
+            IP, database, user = content0[0], content0[1], content0[2]
+            match = re.search(pattern, IP)
+            if not match:
+                user, database, IP = content0[0], content0[1], content0[2]
+            duration = float(re.split(r'\s+', query_content[1])[1].strip()) / 1000
+            query_text, unique_id = query_content[3], query_content[2]
+            if i+3 <= len(blocks):
+                v_params = re.split(r'parameters:\s+', blocks[i + 3])[1] if "parameters:" in blocks[i + 3] else ''
+            else:
+                v_params = ''
+            total_list.append({
+                'time': timestamp, 
+                'qry_text': query_text, 
+                'qry_params': v_params, 
+                'IP': IP, 
+                'database': database, 
+                'user': user,
+                'duration': duration, 
+                'unique_id': unique_id
+            })
+
+# Process logs based on the analysis type
+if e_type == 'plan':
+    parse_nested(start_n, blocks)
+    total_list.sort(key=lambda x: x['qry_text'])
+    grouped = {key: list(group) for key, group in groupby(total_list, key=lambda x: x['qry_text'])}
+    stats = {}
+    for qry_text, group in grouped.items():
+        durations = [item['duration'] for item in group]
+        times = [item['time'] for item in group]
+        stats[qry_text] = {
+            'max_duration': max(durations), 
+            'min_duration': min(durations), 
+            'avg_duration': round(mean(durations),3),
+            'sum_duration': round(sum(durations),3),
+            'count': len(group),
+            'max_times': max(times),
+            'min_times': min(times),
+            'qry_plan': group[0]['qry_plan'],
+            'IP': group[0]['IP'],
+            'database': group[0]['database'],
+            'user': group[0]['user']
+        }
+    sorted_data = sorted(stats.items(), key=lambda x: x[1]['sum_duration'], reverse=True)
+
+    # Generate report
+    base_filename = os.path.splitext(args.file)[0]
+    report_name = f"{base_filename}_query_plan_report"
+
+    if args.output == 'html':
+        with open(f"{report_name}.html", "w") as f:
+            f.write("<html><body><h1>Query Plan Analysis Report</h1><table border='1' cellpadding='5'><tr><th>Query Text</th><th>Time Range</th><th>IP</th><th>Database</th><th>User</th><th>Query Plan</th><th>Duration (sum/max/min/avg)</th><th>Calls</th></tr>")
+            for idx, (qry_text, stat) in enumerate(sorted_data):
+                row_color = "lightyellow" if idx % 2 == 0 else "lightblue"
+                duration_class = "normal" if stat['avg_duration'] < 2 else "warning" if stat['avg_duration'] < 5 else "critical"
+                f.write(f"<tr bgcolor='{row_color}' class='{duration_class}'><td>{qry_text}</td><td>{stat['min_times']} - {stat['max_times']}</td><td>{stat['IP']}</td><td>{stat['database']}</td><td>{stat['user']}</td><td>{stat['qry_plan']}</td><td>{stat['sum_duration']},{stat['max_duration']},{stat['min_duration']},{stat['avg_duration']}</td><td>{stat['count']}</td></tr>")
+            f.write("</table></body></html>")
+        print(f'Successful export data to {report_name}.html')
+    
+    elif args.output == 'csv':
+        with open(f"{report_name}.csv", "w") as f:
+            f.write("Query Text,Time Range,IP,Database,User,Query Plan,Duration (sum/max/min/avg),Calls\n")
+            for qry_text, stat in sorted_data:
+                qry_text = qry_text.replace('"','""')
+                f.write(f"\"{qry_text}\",\"{stat['min_times']} - {stat['max_times']}\",{stat['IP']},{stat['database']},{stat['user']},\"{stat['qry_plan']}\",{stat['sum_duration']}/{stat['max_duration']}/{stat['min_duration']}/{stat['avg_duration']},{stat['count']}\n")
+        print(f'Successful export data to {report_name}.csv')
+    
+    elif args.output == 'txt':
+        with open(f"{report_name}.txt", "w") as f:
+            for qry_text, stat in sorted_data:
+                f.write(f"Query Text: {qry_text}\n")
+                f.write(f"Time Range: {stat['min_times']} - {stat['max_times']}\n")
+                f.write(f"IP: {stat['IP']}\n")
+                f.write(f"Database: {stat['database']}\n")
+                f.write(f"User: {stat['user']}\n")
+                f.write(f"Query Plan: {stat['qry_plan']}\n")
+                f.write(f"Duration (sum/max/min/avg): {stat['sum_duration']}/{stat['max_duration']}/{stat['min_duration']}/{stat['avg_duration']}\n")
+                f.write(f"Calls: {stat['count']}\n")
+                f.write("-" * 50 + "\n")
+        print(f'Successful export data to {report_name}.txt')
+
+elif e_type == 'slow':
+    parse_slow_sql(start_n, blocks)
+    total_list.sort(key=lambda x: x['unique_id'])
+    grouped = {key: list(group) for key, group in groupby(total_list, key=lambda x: x['unique_id'])}
+    stats = {}
+    for unique_id, group in grouped.items():
+        durations = [item['duration'] for item in group]
+        times = [item['time'] for item in group]
+        stats[unique_id] = {
+            'max_duration': max(durations), 
+            'min_duration': min(durations), 
+            'avg_duration': round(mean(durations),3),
+            'sum_duration': round(sum(durations),3),
+            'count': len(group),
+            'max_times': max(times),
+            'min_times': min(times),
+            'qry_params': group[0]['qry_params'],
+            'IP': group[0]['IP'],
+            'database': group[0]['database'],
+            'user': group[0]['user'],
+            'qry_text': group[0]['qry_text']
+        }
+    sorted_data = sorted(stats.items(), key=lambda x: x[1]['sum_duration'], reverse=True)
+
+    # Generate report
+    base_filename = os.path.splitext(args.file)[0]
+    report_name = f"{base_filename}_slow_query_report"
+
+    if args.output == 'html':
+        with open(f"{report_name}.html", "w") as f:
+            f.write("<html><body><h1>Slow Query Analysis Report</h1><table border='1' cellpadding='5'><tr><th>Unique ID</th><th>Time Range</th><th>IP</th><th>Database</th><th>User</th><th>Query Text</th><th>Params</th><th>Duration (sum/max/min/avg)</th><th>Calls</th></tr>")
+            for idx, (unique_id, stat) in enumerate(sorted_data):
+                row_color = "lightyellow" if idx % 2 == 0 else "lightblue"
+                duration_class = "normal" if stat['avg_duration'] < 2 else "warning" if stat['avg_duration'] < 5 else "critical"
+                f.write(f"<tr bgcolor='{row_color}' class='{duration_class}'><td>{unique_id}</td><td>{stat['min_times']} - {stat['max_times']}</td><td>{stat['IP']}</td><td>{stat['database']}</td><td>{stat['user']}</td><td>{stat['qry_text']}</td><td>{stat['qry_params']}</td><td><p>sum:{stat['sum_duration']}<br />max:{stat['max_duration']}<br />min:{stat['min_duration']}<br />avg:{stat['avg_duration']}</p></td><td>{stat['count']}</td></tr>")
+            f.write("</table></body></html>")
+        print(f'Successful export data to {report_name}.html')
+
+    elif args.output == 'csv':
+        with open(f"{report_name}.csv", "w") as f:
+            f.write("Unique ID,Time Range,IP,Database,User,Query Text,Params,Duration (sum/max/min/avg),Calls\n")
+            for unique_id, stat in sorted_data:
+                qry_text = stat['qry_text'].replace('"','""')
+                qry_params = stat['qry_params']
+                f.write(f"{unique_id},{stat['min_times']} - {stat['max_times']},{stat['IP']},{stat['database']},{stat['user']},\"{qry_text}\",\"{qry_params}\",{stat['sum_duration']}/{stat['max_duration']}/{stat['min_duration']}/{stat['avg_duration']},{stat['count']}\n")
+        print(f'Successful export data to {report_name}.csv')
+    
+    elif args.output == 'txt':
+        with open(f"{report_name}.txt", "w") as f:
+            for unique_id, stat in sorted_data:
+                f.write(f"Unique ID: {unique_id}\n")
+                f.write(f"Time Range: {stat['min_times']} - {stat['max_times']}\n")
+                f.write(f"IP: {stat['IP']}\n")
+                f.write(f"Database: {stat['database']}\n")
+                f.write(f"User: {stat['user']}\n")
+                f.write(f"Query Text: {stat['qry_text']}\n")
+                f.write(f"Params: {stat['qry_params']}\n")
+                f.write(f"Duration (sum/max/min/avg)  sum:{stat['sum_duration']}/  max:{stat['max_duration']}/  min:{stat['min_duration']}/  avg:{stat['avg_duration']}\n")
+                f.write(f"Calls: {stat['count']}\n")
+                f.write("-" * 50 + "\n")
+        print(f'Successful export data to {report_name}.txt')
+
+else:
+    print(f'Error: not support type {e_type}', file=sys.stderr)
+    sys.exit(2)
+EOF
+
+    # Execute the python script with the provided arguments
+    python3 "$TEMP_SCRIPT" "${@:2}"
+    
+    # Clean up
+    rm -f "$TEMP_SCRIPT"
+}
+
+
+run_kill_sessions() {
+    CONDITIONS=()
+    PSQL_OPTS=()
+
+    while getopts ":i:s:p:q:d:au:u:t:" opt; do
+      case $opt in
+        i) CONDITIONS+=("client_addr = ''$OPTARG''") ;;
+        s) CONDITIONS+=("state = ''$OPTARG'' and datname not in (''postgres'',''vastbase'',''panweidb'')") ;;
+        p) CONDITIONS+=("pid = ''$OPTARG''") ;;
+        q) CONDITIONS+=("unique_sql_id = ''$OPTARG''") ;;
+        d) CONDITIONS+=("application_name = ''$OPTARG''") ;;
+        a) CONDITIONS+=("datname not in (''postgres'',''vastbase'',''panweidb'')") ;;
+        u) CONDITIONS+=("usename = ''$OPTARG'' ") ;;
+        t) CONDITIONS+=("EXTRACT(EPOCH FROM (now() - xact_start))>$OPTARG and datname not in (''postgres'',''vastbase'',''panweidb'')") ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        :) echo "Option -$OPTARG requires argument" >&2; exit 1 ;;
+      esac
+    done
+    shift $((OPTIND-1))
+    PSQL_OPTS=("$@")
+
+    if [ ${#CONDITIONS[@]} -eq 0 ]; then
+      echo "Error: At least one filter condition required"
+      kill_help
+      exit 1
+    fi
+
+    WHERE_CLAUSE=''
+    
+    for condition in "${CONDITIONS[@]}"; do
+      if [ -z "$WHERE_CLAUSE" ]; then
+        WHERE_CLAUSE="$condition"
+      else
+        WHERE_CLAUSE="$WHERE_CLAUSE AND $condition"
+      fi
+    done
+
+    psql -d postgres "${PSQL_OPTS[@]}" <<EOF
+DO \$\$
+DECLARE
+  r record;
+  result boolean;
+  total int := 0;
+  killed int := 0;
+BEGIN
+  FOR r IN EXECUTE 'SELECT pid FROM pg_stat_activity WHERE $WHERE_CLAUSE AND PID<>pg_backend_pid()'
+  LOOP
+    BEGIN
+      EXECUTE 'SELECT pg_terminate_backend(' || r.pid || ')' INTO result;
+      IF result THEN 
+        killed := killed + 1;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Error terminating PID %: %', r.pid, SQLERRM;
+    END;
+  END LOOP;
+  
+  RAISE NOTICE 'Terminated % sessions', killed;
+END;
+\$\$;
+EOF
+}
+
+run_lock_details() {
+    psql -d postgres <<EOF
+\pset footer off
+\pset format unaligned
+\pset tuples_only on
+\echo '=========================='
+\echo 'detailed lock information'
+\echo '=========================='
+WITH t_wait AS (
+  SELECT a.mode,a.locktype,a.database,a.relation,a.page,a.tuple,a.classid,a.granted,
+         a.objid,a.objsubid,a.pid,a.virtualtransaction,a.virtualxid,a.transactionid,a.fastpath,
+         b.state,b.query,b.xact_start,b.query_start,b.usename,b.datname,b.client_addr,b.client_port,b.application_name
+  FROM pg_locks a,pg_stat_activity b WHERE a.pid=b.pid AND NOT a.granted
+),
+t_run AS (
+  SELECT a.mode,a.locktype,a.database,a.relation,a.page,a.tuple,a.classid,a.granted,
+         a.objid,a.objsubid,a.pid,a.virtualtransaction,a.virtualxid,a.transactionid,a.fastpath,
+         b.state,b.query,b.xact_start,b.query_start,b.usename,b.datname,b.client_addr,b.client_port,b.application_name
+  FROM pg_locks a,pg_stat_activity b WHERE a.pid=b.pid AND a.granted
+),
+t_overlap AS (
+  SELECT r.* FROM t_wait w JOIN t_run r ON
+  (
+    r.locktype IS NOT DISTINCT FROM w.locktype AND
+    r.database IS NOT DISTINCT FROM w.database AND
+    r.relation IS NOT DISTINCT FROM w.relation AND
+    r.page IS NOT DISTINCT FROM w.page AND
+    r.tuple IS NOT DISTINCT FROM w.tuple AND
+    r.virtualxid IS NOT DISTINCT FROM w.virtualxid AND
+    r.transactionid IS NOT DISTINCT FROM w.transactionid AND
+    r.classid IS NOT DISTINCT FROM w.classid AND
+    r.objid IS NOT DISTINCT FROM w.objid AND
+    r.objsubid IS NOT DISTINCT FROM w.objsubid AND
+    r.pid <> w.pid
+  )
+),
+t_unionall AS (
+  SELECT r.* FROM t_overlap r
+  UNION ALL
+  SELECT w.* FROM t_wait w
+)
+SELECT 
+  'Lock Type: ' || COALESCE(locktype::text, 'NULL') || E'\n' ||
+  'Database: ' || COALESCE(datname::text, 'NULL') || E'\n' ||
+  'Relation: ' || COALESCE(relation::regclass::text, 'NULL') || E'\n' ||
+  'Page: ' || COALESCE(page::text, 'NULL') || E'\n' ||
+  'Tuple: ' || COALESCE(tuple::text, 'NULL') || E'\n' ||
+  'VirtualXID: ' || COALESCE(virtualxid::text, 'NULL') || E'\n' ||
+  'TransactionID: ' || COALESCE(transactionid::text, 'NULL') || E'\n' ||
+  'ClassID: ' || COALESCE(classid::regclass::text, 'NULL') || E'\n' ||
+  'ObjID: ' || COALESCE(objid::text, 'NULL') || E'\n' ||
+  'ObjSubID: ' || COALESCE(objsubid::text, 'NULL') || E'\n' ||
+  E'\nLock Holders/Waiters:\n' || 
+  string_agg(
+    'PID: ' || COALESCE(pid::text, 'NULL') || E'\n' ||
+    'Lock Granted: ' || COALESCE(granted::text, 'NULL') || ' , Mode: ' || COALESCE(mode::text, 'NULL') || ' , FastPath: ' || COALESCE(fastpath::text, 'NULL') || E'\n' ||
+    'VirtualTransaction: ' || COALESCE(virtualtransaction::text, 'NULL') || ' , State: ' || COALESCE(state::text, 'NULL') || E'\n' ||
+    'User: ' || COALESCE(usename::text, 'NULL') || ' , Client: ' || COALESCE(client_addr::text, 'NULL') || ':' || COALESCE(client_port::text, 'NULL') || E'\n' ||
+    'Application: ' || COALESCE(application_name::text, 'NULL') || E'\n' ||
+    'Xact Start: ' || COALESCE(xact_start::text, 'NULL') || ' , Query Start: ' || COALESCE(query_start::text, 'NULL') || E'\n' ||
+    'Xact Duration: ' || COALESCE((now()-xact_start)::text, 'NULL') || ' , Query Duration: ' || COALESCE((now()-query_start)::text, 'NULL') || E'\n' ||
+    'Query: ' || E'\n' || COALESCE(substr(regexp_replace(regexp_replace(query, E'[\\n\\r]+', ' ', 'g'), ' '), 1, 100), 'NULL') || E'\n' ||
+    E'\n----------------------------------------\n',
+    E'\n' ORDER BY 
+    (CASE mode
+      WHEN 'INVALID' THEN 0
+      WHEN 'AccessShareLock' THEN 1
+      WHEN 'RowShareLock' THEN 2
+      WHEN 'RowExclusiveLock' THEN 3
+      WHEN 'ShareUpdateExclusiveLock' THEN 4
+      WHEN 'ShareLock' THEN 5
+      WHEN 'ShareRowExclusiveLock' THEN 6
+      WHEN 'ExclusiveLock' THEN 7
+      WHEN 'AccessExclusiveLock' THEN 8
+      ELSE 0
+    END) DESC,
+    (CASE WHEN granted THEN 0 ELSE 1 END)
+  ) AS lock_conflict
+FROM t_unionall
+GROUP BY locktype,datname,relation,page,tuple,virtualxid,transactionid::text,classid,objid,objsubid;
+EOF
+}
+
+run_asp() {
+    local query_type=$1
+    shift
+    
+    local begin_time=""
+    local end_time=""
+    
+    while getopts "b:e:" opt; do
+        case $opt in
+            b) begin_time="$OPTARG" ;;
+            e) end_time="$OPTARG" ;;
+            *) 
+                echo "Error: Invalid option -$OPTARG"
+                asp_help
+                exit 1
+                ;;
+        esac
+    done
+    
+    if [[ -z "$query_type" || -z "$begin_time" || -z "$end_time" ]]; then
+        echo "Error: type, start time and end time are all required"
+        asp_help
+        exit 1
+    fi
+    
+    case "$query_type" in
+        cnt)
+            run_asp_cnt_query "$begin_time" "$end_time"
+            ;;
+        event)
+            run_asp_event_query "$begin_time" "$end_time"
+            ;;
+        waitchain)
+            run_asp_waitchain_query "$begin_time" "$end_time"
+            ;;
+        sql)
+            run_asp_sql_query "$begin_time" "$end_time"
+            ;;
+        *)
+            echo "Error: Invalid type '$query_type'"
+            asp_help
+            exit 1
+            ;;
+    esac
+}
+
+# las_flag: Schema version identifier for the `local_active_session` table.
+# The version is determined by the presence of specific columns.
+#   0 - Table does not exist in the database.
+#   3 - identified by the presence of both `cur_event` and `state` columns (and gs_asp.state).
+#   4 - identified by the presence of an `event` column and the absence of a `state` column.
+#   * - Reserved for future schema definitions; currently unuse	
+    las_flag=$(psql -tAc "select is_event + is_curevent + is_state as las_flag from (
+                            select coalesce(sum(case when attname='event' then 4 else 0 end),0) is_event, 
+                                   coalesce(sum(case when attname='cur_event' then 2 else 0 end),0)  is_curevent,
+                                   coalesce(sum(case when attname='state' then 1 else 0 end),0)  is_state 
+                            from pg_attribute a,pg_class b, pg_namespace c
+                            where a.attrelid=b.oid 
+                            and b.relnamespace=c.oid
+                            and b.relname='local_active_session' 
+                            and c.nspname='dbe_perf')")
+								 
+run_asp_cnt_query() {
+    local begin_time=$(date -d "$1" +'%Y-%m-%d %H:%M:%S')
+    local end_time=$(date -d "$2" +'%Y-%m-%d %H:%M:%S')
+
+    if [[ "$las_flag" = 4 ||  "$las_flag" = 0 ]]; then
+        condition1="1=1"
+        condition2="a.event='wait wal sync'"
+        condition3="a.event='wait transaction sync'"
+        condition4="a.event=b.event"
+    else 
+        condition1="state='active'"
+        condition2="a.cur_event='wait wal sync'"
+        condition3="a.cur_event='wait transaction sync'"
+        condition4="a.cur_event=b.event"
+    fi
+ 
+    if [[ "$las_flag" = 0 ]]; then
+	    psql -d postgres <<EOF
+\pset footer off
+\echo '=================================='
+\echo '   active session history count '
+\echo '=================================='
+WITH time_counts AS (
+        SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        COUNT(*) AS cnt,
+        sum(case when $condition1 then 1 else 0 end) active_cnt,
+        sum(case when b.type='LOCK_EVENT'  then 1 else 0 end) wait_lock_cnt,
+        sum(case when b.type='LWLOCK_EVENT'  then 1 else 0 end) wait_lwlock_cnt,
+        sum(case when b.type='IO_EVENT'  then 1 else 0 end) wait_io_cnt,
+        sum(case when a.event='wait wal sync' then 1 else 0 end) wait_wal_sync_cnt,
+        sum(case when a.event='wait transaction sync' then 1 else 0 end) wait_trans_sync_cnt
+    FROM 
+        gs_asp a  left join dbe_perf.wait_events b on a.event=b.event 
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time'
+    GROUP BY 
+        sample_time::timestamp(0)
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT 
+        table_type,
+        sample_time,
+        cnt,
+        active_cnt,
+        wait_lock_cnt,
+        wait_lwlock_cnt,
+        wait_io_cnt,
+        wait_wal_sync_cnt,
+        wait_trans_sync_cnt
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        table_type,
+        cnt,
+        active_cnt,
+        wait_lock_cnt,
+        wait_lwlock_cnt,
+        wait_io_cnt,
+        wait_wal_sync_cnt,
+        wait_trans_sync_cnt
+    FROM 
+        filtered_data
+)
+SELECT /*+set(enable_nestloop off) set(enable_mergejoin off) set(enable_index_nestloop off)*/
+    CASE 
+        WHEN table_type = 'a' THEN '[local_active_session] ' 
+        ELSE '[gs_asp] ' 
+    END || 
+    to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+    to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+    MAX(cnt) AS max_sess,
+    ROUND(AVG(cnt)) AS avg_sess,
+    MAX(active_cnt) AS max_active_sess,
+    MAX(wait_lock_cnt) AS wait_lock,
+    MAX(wait_lwlock_cnt) AS wait_lwlock,
+    MAX(wait_io_cnt) AS wait_io,
+    MAX(wait_wal_sync_cnt) wait_wal_sync,
+    MAX(wait_trans_sync_cnt) wait_trans_sync
+FROM 
+    five_min_intervals
+GROUP BY 
+    interval_start, table_type
+ORDER BY 
+    interval_start;
+EOF
+    else 
+    psql -d postgres <<EOF
+\pset footer off
+\echo '=================================='
+\echo '   active session history count '
+\echo '=================================='
+WITH time_counts AS (
+    SELECT 'a' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        COUNT(*) AS cnt,
+        sum(case when $condition1 then 1 else 0 end) active_cnt,
+        sum(case when b.type='LOCK_EVENT' then 1 else 0 end) wait_lock_cnt,
+        sum(case when b.type='LWLOCK_EVENT'  then 1 else 0 end) wait_lwlock_cnt,
+        sum(case when b.type='IO_EVENT' then 1 else 0 end) wait_io_cnt,
+        sum(case when $condition2 then 1 else 0 end) wait_wal_sync_cnt,
+        sum(case when $condition3 then 1 else 0 end) wait_trans_sync_cnt
+    FROM 
+        dbe_perf.local_active_session a  left join dbe_perf.wait_events b on $condition4
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' 
+    GROUP BY 
+        sample_time::timestamp(0)
+    UNION ALL 
+    SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        COUNT(*) AS cnt,
+        sum(case when $condition1 then 1 else 0 end) active_cnt,
+        sum(case when b.type='LOCK_EVENT'  then 1 else 0 end) wait_lock_cnt,
+        sum(case when b.type='LWLOCK_EVENT'  then 1 else 0 end) wait_lwlock_cnt,
+        sum(case when b.type='IO_EVENT'  then 1 else 0 end) wait_io_cnt,
+        sum(case when a.event='wait wal sync' then 1 else 0 end) wait_wal_sync_cnt,
+        sum(case when a.event='wait transaction sync' then 1 else 0 end) wait_trans_sync_cnt
+    FROM 
+        gs_asp a  left join dbe_perf.wait_events b on a.event=b.event 
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time'
+    GROUP BY 
+        sample_time::timestamp(0)
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT 
+        table_type,
+        sample_time,
+        cnt,
+        active_cnt,
+        wait_lock_cnt,
+        wait_lwlock_cnt,
+        wait_io_cnt,
+        wait_wal_sync_cnt,
+        wait_trans_sync_cnt
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        table_type,
+        cnt,
+        active_cnt,
+        wait_lock_cnt,
+        wait_lwlock_cnt,
+        wait_io_cnt,
+        wait_wal_sync_cnt,
+        wait_trans_sync_cnt
+    FROM 
+        filtered_data
+)
+SELECT /*+set(enable_nestloop off) set(enable_mergejoin off) set(enable_index_nestloop off)*/
+    CASE 
+        WHEN table_type = 'a' THEN '[local_active_session] ' 
+        ELSE '[gs_asp] ' 
+    END || 
+    to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+    to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+    MAX(cnt) AS max_sess,
+    ROUND(AVG(cnt)) AS avg_sess,
+    MAX(active_cnt) AS max_active_sess,
+    MAX(wait_lock_cnt) AS wait_lock,
+    MAX(wait_lwlock_cnt) AS wait_lwlock,
+    MAX(wait_io_cnt) AS wait_io,
+    MAX(wait_wal_sync_cnt) wait_wal_sync,
+    MAX(wait_trans_sync_cnt) wait_trans_sync
+FROM 
+    five_min_intervals
+GROUP BY 
+    interval_start, table_type
+ORDER BY 
+    interval_start;
+EOF
+    fi
+}
+
+
+run_asp_sql_query() {
+    local begin_time=$(date -d "$1" +'%Y-%m-%d %H:%M:%S')
+    local end_time=$(date -d "$2" +'%Y-%m-%d %H:%M:%S')
+
+    if [[ "$las_flag" = 4 ||  "$las_flag" = 0 ]]; then
+        condition1="1=1"
+        condition4="a.event=b.event"
+        condition5="a.event"
+    else 
+        condition1="state='active'"
+        condition4="a.cur_event=b.event"
+        condition5="a.cur_event"
+    fi
+	
+    if [[ "$las_flag" = 0 ]]; then
+    psql -d postgres <<EOF
+\pset footer off
+\echo '==================================' 
+\echo '   active session history topsql  '
+\echo '=================================='
+WITH time_counts AS (
+        SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        a.unique_query_id as unique_query_id,
+        substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) unique_query,
+        COUNT(*) AS cnt    
+    FROM 
+        gs_asp a left join dbe_perf.wait_events b on a.event=b.event
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and a.event not in ('none') and unique_query_id>0
+    GROUP BY 
+        sample_time::timestamp(0), a.unique_query_id,substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50)
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT *
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        filtered_data.*
+    FROM 
+        filtered_data
+),
+ranked_data AS (
+    SELECT 
+        CASE 
+            WHEN table_type = 'a' THEN '[local_active_session] ' 
+            ELSE '[gs_asp] ' 
+        END || 
+        to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+        to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+        unique_query_id,
+        unique_query,
+        max(cnt) max_cnt,
+        round(avg(cnt)) avg_cnt,
+        ROW_NUMBER() OVER (PARTITION BY date_time ORDER BY max(cnt) DESC) AS row_num
+    FROM 
+        five_min_intervals
+    GROUP BY 
+        interval_start, table_type, unique_query_id,unique_query
+)
+SELECT 
+    date_time,
+    unique_query_id,
+    unique_query,
+    max_cnt,
+    avg_cnt
+FROM 
+    ranked_data
+WHERE 
+    row_num <= 5
+ORDER BY 
+    date_time, max_cnt DESC;
+EOF
+    else 
+    psql -d postgres <<EOF
+\pset footer off
+\echo '==================================' 
+\echo '   active session history topsql  '
+\echo '=================================='
+WITH time_counts AS (
+    SELECT 'a' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        a.unique_query_id as unique_query_id,
+        substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) unique_query,
+        COUNT(*) AS cnt        
+    FROM 
+        dbe_perf.local_active_session a left join dbe_perf.wait_events b on $condition4
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and $condition5 not in ('none') and unique_query_id>0
+    GROUP BY 
+        sample_time::timestamp(0), a.unique_query_id,substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50)
+    UNION ALL 
+    SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        a.unique_query_id as unique_query_id,
+        substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50) unique_query,
+        COUNT(*) AS cnt    
+    FROM 
+        gs_asp a left join dbe_perf.wait_events b on a.event=b.event
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and a.event not in ('none') and unique_query_id>0
+    GROUP BY 
+        sample_time::timestamp(0), a.unique_query_id,substr(REGEXP_REPLACE(REGEXP_REPLACE(unique_query, '(\r|\n)+', ' '),' {2,}', ' '),1,50)
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT *
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        filtered_data.*
+    FROM 
+        filtered_data
+),
+ranked_data AS (
+    SELECT 
+        CASE 
+            WHEN table_type = 'a' THEN '[local_active_session] ' 
+            ELSE '[gs_asp] ' 
+        END || 
+        to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+        to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+        unique_query_id,
+        unique_query,
+        max(cnt) max_cnt,
+        round(avg(cnt)) avg_cnt,
+        ROW_NUMBER() OVER (PARTITION BY date_time ORDER BY max(cnt) DESC) AS row_num
+    FROM 
+        five_min_intervals
+    GROUP BY 
+        interval_start, table_type, unique_query_id,unique_query
+)
+SELECT 
+    date_time,
+    unique_query_id,
+    unique_query,
+    max_cnt,
+    avg_cnt
+FROM 
+    ranked_data
+WHERE 
+    row_num <= 5
+ORDER BY 
+    date_time, max_cnt DESC;
+EOF
+    fi
+}
+
+
+run_asp_event_query() {
+    local begin_time=$(date -d "$1" +'%Y-%m-%d %H:%M:%S')
+    local end_time=$(date -d "$2" +'%Y-%m-%d %H:%M:%S')
+
+    if [[ "$las_flag" = 4 ||  "$las_flag" = 0 ]]; then
+        condition1="1=1"
+        condition4="a.event=b.event"
+        condition5="a.event"
+    else 
+        condition1="a.state='active'"
+        condition4="a.cur_event=b.event"
+        condition5="a.cur_event"
+    fi
+	
+    if [[ "$las_flag" = 0 ]]; then	
+   psql -d postgres <<EOF
+\pset footer off
+\echo '=================================='
+\echo '   active session history event   '
+\echo '=================================='
+WITH time_counts AS (
+        SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        type event_type,
+        a.event as event,
+        COUNT(*) AS cnt    
+    FROM 
+        gs_asp a left join dbe_perf.wait_events b on a.event=b.event
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and a.event not in ('none')
+    GROUP BY 
+        sample_time::timestamp(0),type,a.event
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT *
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        filtered_data.*
+    FROM 
+        filtered_data
+)
+SELECT /*+set(enable_nestloop off) set(enable_mergejoin off) set(enable_index_nestloop off)*/
+    CASE 
+        WHEN table_type = 'a' THEN '[local_active_session] ' 
+        ELSE '[gs_asp] ' 
+    END || 
+    to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+    to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+    event_type,
+    event,
+    max(cnt) max_cnt,
+    round(avg(cnt)) avg_cnt
+FROM 
+    five_min_intervals
+GROUP BY 
+    interval_start, table_type,event_type,event
+ORDER BY 
+    interval_start,max_cnt;
+EOF
+    else 
+   psql -d postgres <<EOF
+\pset footer off
+\echo '=================================='
+\echo '   active session history event   '
+\echo '=================================='
+WITH time_counts AS (
+    SELECT 'a' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        type as event_type,
+        $condition5 as event,
+        COUNT(*) AS cnt        
+    FROM 
+        dbe_perf.local_active_session a left join dbe_perf.wait_events b on $condition4
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and $condition5 not in ('none')
+    GROUP BY 
+        sample_time::timestamp(0),type,$condition5
+    UNION ALL 
+    SELECT 'b' AS table_type,
+        sample_time::timestamp(0) AS sample_time,
+        type event_type,
+        a.event as event,
+        COUNT(*) AS cnt    
+    FROM 
+        gs_asp a left join dbe_perf.wait_events b on a.event=b.event
+    WHERE 
+        sample_time BETWEEN '$begin_time' AND '$end_time' and $condition1 and a.event not in ('none')
+    GROUP BY 
+        sample_time::timestamp(0),type,a.event
+),
+has_a_data AS (
+    SELECT EXISTS(SELECT 1 FROM time_counts WHERE table_type = 'a') AS has_a_records
+),
+filtered_data AS (
+    SELECT *
+    FROM 
+        time_counts
+    WHERE 
+        table_type = CASE 
+            WHEN (SELECT has_a_records FROM has_a_data) THEN 'a'
+            ELSE 'b'
+        END
+),
+five_min_intervals AS (
+    SELECT 
+        DATE_TRUNC('hour', sample_time) 
+        + FLOOR(EXTRACT(MINUTE FROM sample_time) / 5) * INTERVAL '5 min' AS interval_start,
+        filtered_data.*
+    FROM 
+        filtered_data
+)
+SELECT /*+set(enable_nestloop off) set(enable_mergejoin off) set(enable_index_nestloop off)*/
+    CASE 
+        WHEN table_type = 'a' THEN '[local_active_session] ' 
+        ELSE '[gs_asp] ' 
+    END || 
+    to_char(interval_start, 'YYYY-MM-DD HH24:MI:SS') || '-' || 
+    to_char(interval_start + INTERVAL '5 minutes', 'HH24:MI:SS') AS date_time,
+    event_type,
+    event,
+    max(cnt) max_cnt,
+    round(avg(cnt)) avg_cnt
+FROM 
+    five_min_intervals
+GROUP BY 
+    interval_start, table_type,event_type,event
+ORDER BY 
+    interval_start,max_cnt;
+EOF
+    fi
+}
+
+
+
+run_asp_waitchain_query() {
+    local begin_time=$(date -d "$1" +'%Y-%m-%d %H:%M:%S')
+    local end_time=$(date -d "$2" +'%Y-%m-%d %H:%M:%S')
+
+    if [[ "$las_flag" = 4 ||  "$las_flag" = 0 ]]; then
+        condition1="1=1"
+        condition4="a.event=b.event"
+        condition5="a.event"
+        condition6="1=1"
+        condition7="1=1"
+		condition8="' '"
+		condition9="' '"
+    else 
+        condition1="state='active'"
+        condition4="a.cur_event=b.event"
+        condition5="a.cur_event"
+        condition6="a.state='active'"
+        condition7="las.state='active'"		
+		condition8="a.xact_start_time::timestamp(0)"
+		condition9="las.xact_start_time::timestamp(0)"
+    fi   
+
+    if [[ "$las_flag" = 0 ]]; then	
+	psql -d postgres <<EOF
+
+\echo '==================================='
+\echo '       waitchain from gs_asp       '
+\echo '==================================='
+with RECURSIVE gs_asp_1 as (SELECT * from gs_asp where sample_time::timestamp(0) BETWEEN '$begin_time' AND '$end_time'),
+blocking_chain AS (
+    SELECT 
+        sampleid,
+        sessionid AS blocked_sessionid,
+        block_sessionid AS blocker_sessionid,
+        1 AS level,
+        ARRAY[sessionid] AS path
+    FROM gs_asp_1
+    WHERE block_sessionid IS NOT NULL   
+    UNION ALL
+     SELECT 
+        bc.sampleid,
+        bc.blocked_sessionid,
+        a.block_sessionid AS blocker_sessionid,
+        bc.level + 1,
+        bc.path || a.sessionid
+    FROM blocking_chain bc
+    JOIN gs_asp_1 a ON bc.sampleid = a.sampleid 
+                  AND bc.blocker_sessionid = a.sessionid
+    WHERE a.block_sessionid IS NOT NULL
+      AND NOT a.sessionid = ANY(bc.path)
+),
+root_blockers AS (
+    SELECT 
+        sampleid,
+        blocked_sessionid,
+        blocker_sessionid AS root_blocker,
+        level
+    FROM blocking_chain
+    WHERE NOT EXISTS (
+        SELECT 1 FROM gs_asp_1 a 
+        WHERE a.sampleid = blocking_chain.sampleid 
+          AND a.sessionid = blocking_chain.blocker_sessionid
+          AND a.block_sessionid IS NOT NULL
+    )
+),
+blocker_stats AS (
+    SELECT 
+        sampleid,
+        root_blocker,
+        COUNT(blocked_sessionid) AS blocked_count,
+        MIN(blocked_sessionid) AS example_blocked_sessionid
+    FROM root_blockers
+    GROUP BY sampleid, root_blocker
+)
+SELECT /*+set(enable_mergejoin off) set(enable_nestloop off) set(enable_index_nestloop off)*/ 
+    las.sample_time::timestamp(0) sample_time,
+    las.sessionid||'('||case when $condition7 then 'a' else 'iit' end||')'||'('||$condition9||')' root_block_sessid,
+    bs.blocked_count as b_cnt,
+    substr(las.unique_query,1,50) h_sql,
+    substr(blocked_las.unique_query,1,50) w_sql
+FROM blocker_stats bs
+JOIN gs_asp_1 las ON bs.sampleid = las.sampleid 
+                                      AND bs.root_blocker = las.sessionid
+JOIN gs_asp_1 blocked_las ON bs.sampleid = blocked_las.sampleid 
+                                              AND bs.example_blocked_sessionid = blocked_las.sessionid
+ORDER BY bs.sampleid, bs.blocked_count DESC; 
+EOF
+	else 
+	psql -d postgres <<EOF
+\pset footer off
+\echo '==================================='
+\echo 'waitchain from local_active_session'
+\echo '==================================='
+WITH blocked_sessions AS (
+    SELECT 
+        sampleid,
+        sample_time::timestamp(0) AS sample_time,
+        final_block_sessionid,
+        wait_status,
+        max(sessionid) w_sessionid,
+        count(*) cnt
+    FROM 
+        dbe_perf.local_active_session
+    WHERE 
+        sample_time::timestamp(0) BETWEEN '$begin_time' AND '$end_time'
+        AND $condition1
+        AND final_block_sessionid IS NOT NULL 
+    group by sampleid,sample_time::timestamp(0),final_block_sessionid,wait_status
+)
+ SELECT /*+set(enable_mergejoin off) set(enable_nestloop off) set(enable_index_nestloop off)*/ a.sample_time::timestamp(0) sample_time,b.final_block_sessionid||'('||case when $condition6 then 'a' else 'iit' end||')'||'('||$condition8||')' root_block_sessid,b.cnt as b_cnt,substr(a.unique_query,1,50) h_sql,substr(c.unique_query,1,50) w_sql
+    FROM 
+        dbe_perf.local_active_session a,blocked_sessions b,dbe_perf.local_active_session c
+    WHERE a.sampleid=b.sampleid and b.final_block_sessionid=a.sessionid and b.sampleid=c.sampleid and b.w_sessionid=c.sessionid
+    ORDER BY 
+        a.sample_time::timestamp(0),
+        b.final_block_sessionid;
+        
+\echo '==================================='
+\echo '       waitchain from gs_asp       '
+\echo '==================================='
+with RECURSIVE gs_asp_1 as (SELECT * from gs_asp where sample_time::timestamp(0) BETWEEN '$begin_time' AND '$end_time'),
+blocking_chain AS (
+    SELECT 
+        sampleid,
+        sessionid AS blocked_sessionid,
+        block_sessionid AS blocker_sessionid,
+        1 AS level,
+        ARRAY[sessionid] AS path
+    FROM gs_asp_1
+    WHERE block_sessionid IS NOT NULL   
+    UNION ALL
+     SELECT 
+        bc.sampleid,
+        bc.blocked_sessionid,
+        a.block_sessionid AS blocker_sessionid,
+        bc.level + 1,
+        bc.path || a.sessionid
+    FROM blocking_chain bc
+    JOIN gs_asp_1 a ON bc.sampleid = a.sampleid 
+                  AND bc.blocker_sessionid = a.sessionid
+    WHERE a.block_sessionid IS NOT NULL
+      AND NOT a.sessionid = ANY(bc.path)
+),
+root_blockers AS (
+    SELECT 
+        sampleid,
+        blocked_sessionid,
+        blocker_sessionid AS root_blocker,
+        level
+    FROM blocking_chain
+    WHERE NOT EXISTS (
+        SELECT 1 FROM gs_asp_1 a 
+        WHERE a.sampleid = blocking_chain.sampleid 
+          AND a.sessionid = blocking_chain.blocker_sessionid
+          AND a.block_sessionid IS NOT NULL
+    )
+),
+blocker_stats AS (
+    SELECT 
+        sampleid,
+        root_blocker,
+        COUNT(blocked_sessionid) AS blocked_count,
+        MIN(blocked_sessionid) AS example_blocked_sessionid
+    FROM root_blockers
+    GROUP BY sampleid, root_blocker
+)
+SELECT /*+set(enable_mergejoin off) set(enable_nestloop off) set(enable_index_nestloop off)*/ 
+    las.sample_time::timestamp(0) sample_time,
+    las.sessionid||'('||case when $condition7 then 'a' else 'iit' end||')'||'('||$condition9||')' root_block_sessid,
+    bs.blocked_count as b_cnt,
+    substr(las.unique_query,1,50) h_sql,
+    substr(blocked_las.unique_query,1,50) w_sql
+FROM blocker_stats bs
+JOIN gs_asp_1 las ON bs.sampleid = las.sampleid 
+                                      AND bs.root_blocker = las.sessionid
+JOIN gs_asp_1 blocked_las ON bs.sampleid = blocked_las.sampleid 
+                                              AND bs.example_blocked_sessionid = blocked_las.sessionid
+ORDER BY bs.sampleid, bs.blocked_count DESC; 
+EOF
+    fi
+}
+
+run_dead_tups() {
+    CONDITIONS=()
+    PSQL_OPTS=()
+    local db_param=""
+    
+    while getopts ":d:s:t:" opt; do
+      case $opt in
+        d) db_param="$OPTARG" ;;
+        s) CONDITIONS+=("and n.nspname = '$OPTARG'") ;;
+        t) CONDITIONS+=("and c.relname = '$OPTARG'") ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+        :) echo "Option -$OPTARG requires argument" >&2; exit 1 ;;
+      esac
+    done
+    shift $((OPTIND-1))
+    PSQL_OPTS=("$@")
+
+    if [ -z "$db_param" ]; then
+        echo "Error: -d parameters required" >&2
+        dead_tups_help
+        exit 1
+    fi
+
+    WHERE_CLAUSE=''
+    
+    for condition in "${CONDITIONS[@]}"; do
+      if [ -z "$WHERE_CLAUSE" ]; then
+        WHERE_CLAUSE="$condition"
+      else
+        WHERE_CLAUSE="$WHERE_CLAUSE $condition"
+      fi
+    done
+
+    psql -d "$db_param"  <<EOF
+\echo '=========================='
+\echo ' Instance xid information '
+\echo '=========================='
+select gs_txid_oldestxmin() as oldestxmin, case pg_is_in_recovery() when true then null else txid_current() end as current_xid, c.two_pc_cnt,c.two_pc_minxid,d.slot_xmin,d.slot_catalog_xmin 
+,(select gs_get_shared_memctx_detail('ProcSubXidCacheContext')) as subxid_size
+from  (select count(*) as two_pc_cnt,min(transaction::text) as two_pc_minxid from pg_prepared_xacts) c,
+(select min(xmin::text) as slot_xmin,min(catalog_xmin::text) as slot_catalog_xmin  from pg_replication_slots) d 
+where 1=1;
+\echo '=========================='
+\echo ' Oldestxmin information   '
+\echo '=========================='
+select a.gxid,a.xmin,a.pid,b.application_name,b.state,b.xact_start::timestamp(0),b.query_start::timestamp(0),substr(b.query,1,30) query from pg_running_xacts a left join  pg_stat_activity b on a.pid=b.pid where a.gxid=gs_txid_oldestxmin() union 
+select a.gxid,a.xmin,a.pid,b.application_name,b.state,b.xact_start::timestamp(0),b.query_start::timestamp(0),substr(b.query,1,30) query from pg_running_xacts a left join  pg_stat_activity b on a.pid=b.pid where a.xmin=gs_txid_oldestxmin() ;
+\echo '=========================='
+\echo ' Dead tuples information  '
+\echo '=========================='
+SELECT c.oid AS relid, n.nspname||'.'||c.relname as tablename,age(relfrozenxid64) as table_age, c.relpages, c.reltuples, 
+    pg_stat_get_tuples_changed(c.oid) as n_dml_tup,
+    pg_stat_get_live_tuples(c.oid) AS n_live_tup, 
+    pg_stat_get_dead_tuples(c.oid) AS n_dead_tup, 
+    case when coalesce(pg_stat_get_last_vacuum_time(c.oid),'2000-01-01 00:00:00') 
+               < coalesce(pg_stat_get_last_autovacuum_time(c.oid),'2001-01-01 00:00:00') 
+         then pg_stat_get_last_autovacuum_time(c.oid)::timestamp(0) 
+         else pg_stat_get_last_vacuum_time(c.oid)::timestamp(0)
+         end as latest_vacuum,
+    case when coalesce(pg_stat_get_last_analyze_time(c.oid),'2000-01-01 00:00:00') 
+               < coalesce(pg_stat_get_last_autoanalyze_time(c.oid),'2001-01-01 00:00:00') 
+         then pg_stat_get_last_autoanalyze_time(c.oid)::timestamp(0) 
+         else pg_stat_get_last_analyze_time(c.oid)::timestamp(0)
+         end as latest_analyze
+   FROM pg_class AS c
+   LEFT JOIN pg_namespace AS n ON n.oid = c.relnamespace
+  WHERE c.relkind in ('r', 't', 'm')
+  $WHERE_CLAUSE
+ order by n_dead_tup desc ,reltuples desc 
+ limit 30;
+\echo '=========================='
+\echo 'Show parameter from vacuum'
+\echo '=========================='
+SELECT name,decode(unit,'8kB',setting*8||'kB',setting||nvl(unit,' ')) setting,context FROM pg_settings WHERE name LIKE '%vacuum%';
+EOF
+}
+
+case "$1" in
+    as)
+        if [ -z "$2" ]; then
+            echo "Error: as requires a vb pid parameter" >&2
+            as_help
+            exit 1
+        fi
+        if ! run_as "$2"; then
+            as_help
+            exit 1
+        fi
+        ;;
+    sp)
+        if [ -z "$2" ]; then
+            echo "Error: sp requires a parameter" >&2
+            sp_help
+            exit 1
+        fi
+        if ! run_sp "$2"; then
+            sp_help
+            exit 1
+        fi
+        ;;
+    st)
+        if [ -z "$2" ]; then
+            echo "Error: st requires a relname parameter" >&2
+            st_help
+            exit 1
+        fi
+        if ! run_st "$2"; then
+            st_help
+            exit 1
+        fi
+        ;;
+    slow)
+        if ! run_slow; then
+            slow_help
+            exit 1
+        fi
+        ;;
+    xloghc)
+        if ! run_xloghc; then
+            xloghc_help
+            exit 1
+        fi
+        ;;
+    analyze_log)
+        if [ -z "$2" ]; then
+            echo "Error: analyze_log requires a log file parameter" >&2
+            analyze_log_help
+            exit 1
+        fi
+        if ! run_analyze "$@"; then
+            analyze_log_help
+            exit 1
+        fi
+        ;;
+    kill)
+        if ! run_kill_sessions "${@:2}"; then
+            kill_help
+            exit 1
+        fi
+        ;;
+    tabstat)
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo "Error: tabstat requires database, schema, and table parameters" >&2
+            tabstat_help
+            exit 1
+        fi
+        if ! run_tabstat "${@:2}"; then
+            tabstat_help
+            exit 1
+        fi
+        ;;
+    tabsize)
+        if [ -z "$2" ]; then
+            echo "Error: tabsize requires a top number or database/schema/table parameters" >&2
+            tabsize_help
+            exit 1
+        fi
+        if ! run_tabsize "${@:2}"; then
+            tabsize_help
+            exit 1
+        fi
+        ;;
+    sqlstat)
+        if [ -z "$2" ]; then
+            echo "Error: sqlstat requires a unique_query_id" >&2
+            sqlstat_help
+            exit 1
+        fi
+        if ! run_sqlstat "$2"; then
+            sqlstat_help
+            exit 1
+        fi
+        ;;
+    flamegraph)
+        if ! run_flamegraph "${@:2}"; then
+            flamegraph_help
+            exit 1
+        fi
+        ;;
+    osw_netstat)
+        if ! run_osw_netstat "${@:2}"; then
+            osw_netstat_help
+            exit 1
+        fi
+        ;;
+    wdr_topsql)
+        if ! run_wdr_topsql; then
+            wdr_topsql_help
+            exit 1
+        fi
+        ;;
+	recover_table)
+        if ! run_recover_table "${@:2}"; then
+            recover_table_help
+            exit 1
+        fi
+        ;;
+    wdr_summary)
+        if ! run_wdr_summary; then
+            wdr_summary_help
+            exit 1
+        fi
+        ;;
+	wdr_event)
+        if ! run_wdr_event; then
+            wdr_event_help
+            exit 1
+        fi
+        ;;
+    lockchain)
+        if ! run_lockchain; then
+            lockchain_help
+            exit 1
+        fi
+        ;;
+    lock_details)
+        if ! run_lock_details; then
+            lock_details_help
+            exit 1
+        fi
+        ;;
+    priv)
+        if ! run_show_privilege "${@:2}"; then
+            priv_help
+            exit 1
+        fi
+        ;;
+    mem)
+        if ! run_mem; then
+            mem_help
+            exit 1
+        fi
+        ;;
+    repl)
+        if ! run_repl; then
+            repl_help
+            exit 1
+        fi
+        ;;
+    relxlog)
+        if [ -z "$2" ] || [ -z "$3" ]; then
+            echo "Error: relxlog requires START_LSN and END_LSN parameters" >&2
+            relxlog_help
+            exit 1
+        fi
+        if ! run_relxlog "$2" "$3"; then
+            relxlog_help
+            exit 1
+        fi
+        ;;
+    memhist)
+        if ! run_memhist; then
+            memhist_help
+            exit 1
+        fi
+        ;;
+    asp)
+        if [ -z "$2" ]; then
+            echo "Error: asp requires a type parameter" >&2
+            asp_help
+            exit 1
+        fi
+        if ! run_asp "${@:2}"; then
+            asp_help
+            exit 1
+        fi
+        ;;
+    dead_tups)
+        if ! run_dead_tups "${@:2}"; then
+            dead_tups_help
+            exit 1
+        fi
+        ;;
+    -h|--help|help|"")
+        show_help
+        ;;
+    list)
+       show_list
+       ;;
+    *)
+        echo "Error: unknown script '$1'" >&2
+        show_list
+        exit 1
+        ;;
+esac
+
